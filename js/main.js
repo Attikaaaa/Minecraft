@@ -935,6 +935,14 @@ setNetworkHandlers({
   },
   onChat: (payload) => {
     if (!payload || payload.id === network.clientId) return;
+    if (payload.kind === "system") {
+      addChatMessage(payload.text, "system");
+      return;
+    }
+    if (payload.kind === "me") {
+      addChatMessage(`* ${payload.name} ${payload.text}`, "system");
+      return;
+    }
     addChatMessage(`${payload.name}: ${payload.text}`, "player");
   },
   onHostChange: () => {

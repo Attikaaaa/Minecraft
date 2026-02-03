@@ -240,7 +240,14 @@ wss.on("connection", (ws) => {
     if (message.type === "chat") {
       const text = (message.text || "").toString().slice(0, 200);
       if (!text) return;
-      broadcast(room, { type: "chat", id: clientId, name: room.clients.get(clientId)?.name || "Player", text });
+      const kind = typeof message.kind === "string" ? message.kind : null;
+      broadcast(room, {
+        type: "chat",
+        id: clientId,
+        name: room.clients.get(clientId)?.name || "Player",
+        text,
+        kind,
+      });
       return;
     }
 

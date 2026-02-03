@@ -257,7 +257,11 @@ registerCommand("say", "Üzenet küldése a chatbe", "/say <szöveg>", (args) =>
     showUsage("/say <szöveg>");
     return;
   }
-  addChatMessage(`[Server] ${text}`, "system");
+  const message = `[Server] ${text}`;
+  addChatMessage(message, "system");
+  if (network.connected) {
+    sendChat({ text: message, kind: "system" });
+  }
 });
 
 registerCommand("me", "Szerepjáték üzenet", "/me <szöveg>", (args) => {
@@ -266,7 +270,11 @@ registerCommand("me", "Szerepjáték üzenet", "/me <szöveg>", (args) => {
     showUsage("/me <szöveg>");
     return;
   }
+  const message = `${text}`;
   addChatMessage(`* Játékos ${text}`, "system");
+  if (network.connected) {
+    sendChat({ text: message, kind: "me" });
+  }
 });
 
 registerCommand("give", "Item adása", "/give <item> [count]", (args) => {
