@@ -102,3 +102,10 @@ Original prompt: Csinálj egy 3d játékot, wasd mozgas, nezes minden, minecraft
 - Debug HUD alapból rejtett; F3 toggle. Debug URL param debug=1 bekapcsolja.
 - UI screenshotok generálva: output/web-game-hud2, inventory2, crafting2, chat2, death2, torch-night2, creative2, spectator2, minebar2.
 - HUD elhelyezés finomítva (hearts/hunger középre, status felül balra, chat bal alul).
+- Javítva a textúra atlas UV sor-irány (atlas.js), így a blokkok rendesek lettek (nem “színes zaj”).
+- Grass/crafting mapFace kényszerítés visszavéve, hogy a top/side textúrák helyesen jelenjenek meg.
+- Water UV ismétlés letiltása nagy quadokon (mesher.js), hogy a víz ne csíkosodjon.
+- Spectator strafe irány javítva (rightDir yaw + PI/2).
+- Screenshotok: output/web-game-texture6, output/web-game-texture7, output/web-game-texture8, output/grass-view4.
+- Világgenerálás: kevesebb kő a felszínen (rocky küszöb + magasság feljebb), fa csak grass/dirt tetejű blokkokon nő.
+- Playwright screenshot: output/web-game-rockfix/shot-0.png.

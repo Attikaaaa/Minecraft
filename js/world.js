@@ -5,6 +5,7 @@ import { blockDefs } from "./textures.js";
 import { atlasMaterials } from "./atlas.js";
 import { buildChunkMeshBuffers } from "./mesher.js";
 import { state } from "./state.js";
+import { createWaterSystem } from "./water.js";
 
 export const chunks = new Map();
 
@@ -38,6 +39,17 @@ const worldToChunk = (x, z) => {
 };
 
 const blockIndex = (lx, y, lz) => (y * CHUNK_SIZE + lz) * CHUNK_SIZE + lx;
+
+const encodeWaterLevel = (level) => {
+  if (!Number.isFinite(level)) return 1;
+  const clamped = Math.max(0, Math.min(7, level));
+  return clamped + 1;
+};
+
+const decodeWaterLevel = (stored) => {
+  if (!stored) return 0;
+  return Math.max(0, stored - 1);
+};
 
 const getChunk = (cx, cz) => chunks.get(chunkKey(cx, cz)) || null;
 
@@ -239,7 +251,8 @@ const generateChunk = (chunk) => {
       const height = terrain.height;
       const isBeach = height <= SEA_LEVEL + 1 || terrain.isRiver || terrain.isLake;
       const isDesert = terrain.moisture < 0.25 && terrain.temperature > 0.4;
-      const isRocky = terrain.mountainMask > 0.72 || height > SEA_LEVEL + 8;
+      // Reduce rocky coverage so stone only appears on higher peaks/cliffs.
+      const isRocky = terrain.mountainMask > 0.82 || height > SEA_LEVEL + 12;
       const topType = isRocky ? 3 : isDesert || isBeach ? 6 : 1;
       const fillerType = isRocky ? 3 : isDesert || isBeach ? 6 : 2;
 
@@ -269,10 +282,12 @@ const generateChunk = (chunk) => {
       }
 
       const noTreeZone = Math.abs(worldX - spawn.x) <= 2 && Math.abs(worldZ - spawn.z) <= 2;
+      const canGrowTree = topType === 1 && fillerType === 2;
       if (
         !noTreeZone &&
         !isBeach &&
         !isDesert &&
+        canGrowTree &&
         height < WORLD_MAX_HEIGHT - 7 &&
         isTreeCandidate(worldX, worldZ, terrain.moisture, terrain.temperature)
       ) {

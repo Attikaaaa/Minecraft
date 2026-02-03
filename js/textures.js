@@ -406,7 +406,7 @@ const torchTexture = makePixelTexture({
 const torchMaterial = makeMat(torchTexture);
 
 export const blockDefs = {
-  1: { name: "Fű", solid: true, renderGroup: "opaque", variants: grassMaterials, mapFace: "top" },
+  1: { name: "Fű", solid: true, renderGroup: "opaque", variants: grassMaterials },
   2: { name: "Föld", solid: true, renderGroup: "opaque", variants: dirtMaterials },
   3: { name: "Kő", solid: true, renderGroup: "opaque", variants: stoneMaterials },
   4: { name: "Fa", solid: true, renderGroup: "opaque", variants: woodMaterials, mapFace: "side" },
@@ -414,7 +414,7 @@ export const blockDefs = {
   6: { name: "Homok", solid: true, renderGroup: "opaque", variants: sandMaterials },
   7: { name: "Szénérc", solid: true, renderGroup: "opaque", variants: coalMaterials, mapFace: "side" },
   8: { name: "Víz", solid: false, renderGroup: "water", variants: [waterMaterial] },
-  9: { name: "Munkapad", solid: true, renderGroup: "opaque", variants: craftingTableMaterials, mapFace: "top" },
+  9: { name: "Munkapad", solid: true, renderGroup: "opaque", variants: craftingTableMaterials },
   10: { name: "Deszka", solid: true, renderGroup: "opaque", variants: plankMaterials, mapFace: "top" },
   11: { name: "Kockakő", solid: true, renderGroup: "opaque", variants: cobbleMaterials, mapFace: "side" },
   12: { name: "Vasérc", solid: true, renderGroup: "opaque", variants: ironOreMaterials, mapFace: "side" },
