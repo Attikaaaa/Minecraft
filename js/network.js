@@ -20,6 +20,7 @@ export const network = {
   onPlayerJoin: null,
   onPlayerLeave: null,
   onHostChange: null,
+  onSnapshot: null,
   onDisconnect: null,
   onError: null,
 };
@@ -134,6 +135,11 @@ export const connect = ({ url, room, name, isHost, seed }) => {
       return;
     }
 
+    if (payload.type === "snapshot") {
+      safeCall(network.onSnapshot, payload.snapshot ?? null);
+      return;
+    }
+
     if (payload.type === "action") {
       safeCall(network.onAction, payload);
       return;
@@ -210,6 +216,11 @@ export const sendAction = (action) => {
   send({ type: "action", action });
 };
 
+export const requestSnapshot = () => {
+  if (!network.connected) return;
+  send({ type: "request_snapshot" });
+};
+
 export const setNetworkHandlers = (handlers = {}) => {
   network.onWelcome = handlers.onWelcome || network.onWelcome;
   network.onPlayerState = handlers.onPlayerState || network.onPlayerState;
@@ -220,6 +231,7 @@ export const setNetworkHandlers = (handlers = {}) => {
   network.onPlayerJoin = handlers.onPlayerJoin || network.onPlayerJoin;
   network.onPlayerLeave = handlers.onPlayerLeave || network.onPlayerLeave;
   network.onHostChange = handlers.onHostChange || network.onHostChange;
+  network.onSnapshot = handlers.onSnapshot || network.onSnapshot;
   network.onDisconnect = handlers.onDisconnect || network.onDisconnect;
   network.onError = handlers.onError || network.onError;
   network.onAction = handlers.onAction || network.onAction;

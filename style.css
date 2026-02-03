@@ -78,6 +78,42 @@ button:hover {
   width: min(620px, 92vw);
 }
 
+.keybinds-panel,
+.help-panel {
+  max-width: 520px;
+  width: min(520px, 92vw);
+}
+
+.keybinds-list,
+.help-list {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+  max-height: 340px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.keybind-row,
+.help-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.keybind-key {
+  min-width: 120px;
+  text-align: center;
+}
+
+.keybinds-hint {
+  font-size: 12px;
+  color: #ffe8a6;
+  margin-bottom: 6px;
+}
+
 .menu-buttons {
   display: flex;
   flex-direction: column;

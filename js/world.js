@@ -3,6 +3,7 @@ import {
   CHUNK_RADIUS,
   CHUNK_SIZE,
   SEA_LEVEL,
+  UNLIMITED_CHUNK_CAP,
   VIEW_RADIUS_MAX,
   VIEW_RADIUS_MIN,
   VIEW_RADIUS_UNLIMITED,
@@ -15,7 +16,7 @@ import { noise2D, noise3D, hash2, hash3, smoothstep } from "./noise.js";
 import { blockDefs } from "./textures.js";
 import { atlasMaterials, blockFaceTiles, blockRenderGroups, blockMapFaces } from "./atlas.js";
 import { buildChunkMeshBuffers } from "./mesher.js";
-import { buildCustomBlocksForChunk, clearCustomBlocksForChunk, getTorchOrientation } from "./custom-blocks.js";
+import { buildCustomBlocksForChunk, clearCustomBlocksForChunk, getTorchOrientation, setTorchOrientation } from "./custom-blocks.js";
 import { state } from "./state.js";
 import { createWaterSystem } from "./water.js";
 import { network, sendBlockUpdates } from "./network.js";
@@ -23,6 +24,7 @@ import { network, sendBlockUpdates } from "./network.js";
 export const chunks = new Map();
 const testMode = urlParams.get("test") === "1";
 const worldEdits = new Map();
+const worldEditsByChunk = new Map();
 
 export const keyFor = (x, y, z) => `${x},${y},${z}`;
 const chunkKey = (cx, cz) => `${cx},${cz}`;
@@ -60,6 +62,29 @@ const worldToChunk = (x, z) => {
 
 const blockIndex = (lx, y, lz) => (y * CHUNK_SIZE + lz) * CHUNK_SIZE + lx;
 
+const indexWorldEdit = (x, z, entry) => {
+  const { cx, cz } = worldToChunk(x, z);
+  const key = chunkKey(cx, cz);
+  let bucket = worldEditsByChunk.get(key);
+  if (!bucket) {
+    bucket = new Map();
+    worldEditsByChunk.set(key, bucket);
+  }
+  bucket.set(entry.key, entry);
+};
+
+const rebuildWorldEditsIndex = () => {
+  worldEditsByChunk.clear();
+  for (const entry of worldEdits.values()) {
+    if (!entry || typeof entry.key !== "string") continue;
+    const [sx, sy, sz] = entry.key.split(",");
+    const x = Number(sx);
+    const z = Number(sz);
+    if (!Number.isFinite(x) || !Number.isFinite(z)) continue;
+    indexWorldEdit(x, z, entry);
+  }
+};
+
 const encodeWaterLevel = (level) => {
   if (!Number.isFinite(level)) return 1;
   const clamped = Math.max(0, Math.min(7, level));
@@ -84,6 +109,7 @@ const createChunk = (cx, cz) => {
     water: new Uint8Array(blocksPerChunk),
     generated: false,
     loaded: false,
+    evicted: false,
     dirty: false,
     genQueued: false,
     meshQueued: false,
@@ -157,7 +183,9 @@ const recordWorldEdit = (x, y, z, type, options = {}) => {
   const key = keyFor(x, y, z);
   const waterLevel = type === 8 ? (options.waterLevel ?? getWaterLevel(x, y, z)) : null;
   const torchOrientation = type === 18 ? (options.torchOrientation ?? getTorchOrientation(x, y, z)) : null;
-  worldEdits.set(key, { key, type, waterLevel, torchOrientation });
+  const entry = { key, type, waterLevel, torchOrientation };
+  worldEdits.set(key, entry);
+  indexWorldEdit(x, z, entry);
 };
 
 const markChunkDirty = (chunk) => {
@@ -383,6 +411,23 @@ const generateChunk = (chunk) => {
             }
           }
         }
+      }
+    }
+  }
+
+  const edits = worldEditsByChunk.get(chunk.key);
+  if (edits) {
+    for (const entry of edits.values()) {
+      if (!entry || typeof entry.key !== "string") continue;
+      const [sx, sy, sz] = entry.key.split(",");
+      const x = Number(sx);
+      const y = Number(sy);
+      const z = Number(sz);
+      if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
+      const { lx, lz } = worldToChunk(x, z);
+      setBlockInChunk(chunk, lx, y, lz, entry.type ?? 0, entry.waterLevel ?? null);
+      if (entry.type === 18 && entry.torchOrientation) {
+        setTorchOrientation(x, y, z, entry.torchOrientation);
       }
     }
   }
@@ -616,7 +661,7 @@ const queueGenerate = (chunk) => {
 };
 
 const sendMeshJob = (chunk) => {
-  if (!chunk.generated) return;
+  if (!chunk.generated || chunk.evicted) return;
   if (!meshWorkerAvailable || !meshWorker) {
     rebuildChunkMesh(chunk);
     return;
@@ -651,6 +696,7 @@ const drainMeshApplyQueue = (budgetMs) => {
     if (!job) continue;
     meshJobs.delete(payload.jobId);
     const chunk = job.chunk;
+    if (!chunk || chunk.evicted || !chunks.has(chunk.key)) continue;
     chunk.meshInFlight = false;
     if (!chunk.shouldBeLoaded) continue;
     const normalized = {
@@ -666,6 +712,42 @@ const drainMeshApplyQueue = (budgetMs) => {
     }
   }
   worldTimings.meshMs = performance.now() - start;
+};
+
+const enforceUnlimitedChunkCap = (centerCx, centerCz, needed) => {
+  if (!state.unlimitedViewDistance) return;
+  if (state.multiplayer.enabled) return;
+  const cap = Math.max(64, Number.isFinite(UNLIMITED_CHUNK_CAP) ? UNLIMITED_CHUNK_CAP : 1024);
+  if (chunks.size <= cap) return;
+  const candidates = [];
+  for (const chunk of chunks.values()) {
+    const keep = needed?.has(chunk.key);
+    const dist = (chunk.cx - centerCx) * (chunk.cx - centerCx) + (chunk.cz - centerCz) * (chunk.cz - centerCz);
+    candidates.push({ chunk, keep, dist });
+  }
+  candidates.sort((a, b) => {
+    if (a.keep !== b.keep) return a.keep ? 1 : -1;
+    return b.dist - a.dist;
+  });
+  let idx = 0;
+  while (chunks.size > cap && idx < candidates.length) {
+    const candidate = candidates[idx++];
+    const chunk = candidate.chunk;
+    if (!chunk || chunk.evicted) continue;
+    if (candidate.keep && chunks.size <= cap) break;
+    if (chunk.blocks && chunk.generated) {
+      let removed = 0;
+      for (let i = 0; i < chunk.blocks.length; i += 1) {
+        if (chunk.blocks[i]) removed += 1;
+      }
+      if (removed) {
+        state.blocks = Math.max(0, state.blocks - removed);
+      }
+    }
+    unloadChunk(chunk);
+    chunk.evicted = true;
+    chunks.delete(chunk.key);
+  }
 };
 
 export const ensureChunksAround = (x, z) => {
@@ -731,6 +813,8 @@ export const ensureChunksAround = (x, z) => {
         if (chunk.loaded) unloadChunk(chunk);
       }
     }
+  } else {
+    enforceUnlimitedChunkCap(cx, cz, needed);
   }
 };
 
@@ -747,6 +831,7 @@ export const updateWorld = () => {
   while (queueSize(genQueue) && performance.now() - startGen < genBudgetMs) {
     const chunk = dequeue(genQueue);
     if (!chunk) break;
+    if (chunk.evicted || !chunks.has(chunk.key)) continue;
     chunk.genQueued = false;
     generateChunk(chunk);
   }
@@ -758,6 +843,7 @@ export const updateWorld = () => {
     while (queueSize(meshQueue) && performance.now() - startMesh < meshBudgetMs && jobs < maxMeshJobsPerFrame) {
       const chunk = dequeue(meshQueue);
       if (!chunk) break;
+      if (chunk.evicted || !chunks.has(chunk.key)) continue;
       chunk.meshQueued = false;
       if (!chunk.shouldBeLoaded) continue;
       sendMeshJob(chunk);
@@ -769,6 +855,7 @@ export const updateWorld = () => {
     while (queueSize(meshQueue) && performance.now() - startMesh < meshBudgetMs) {
       const chunk = dequeue(meshQueue);
       if (!chunk) break;
+      if (chunk.evicted || !chunks.has(chunk.key)) continue;
       if (!chunk.shouldBeLoaded) {
         chunk.meshQueued = false;
         continue;
@@ -899,6 +986,7 @@ export const getWorldEditsSnapshot = () => Array.from(worldEdits.values());
 
 export const setWorldEditsSnapshot = (entries) => {
   worldEdits.clear();
+  worldEditsByChunk.clear();
   if (!Array.isArray(entries)) return;
   for (const entry of entries) {
     if (!entry || typeof entry.key !== "string") continue;
@@ -909,10 +997,12 @@ export const setWorldEditsSnapshot = (entries) => {
       torchOrientation: entry.torchOrientation ?? null,
     });
   }
+  rebuildWorldEditsIndex();
 };
 
 export const clearWorldEdits = () => {
   worldEdits.clear();
+  worldEditsByChunk.clear();
 };
 
 export const getWorldTimings = () => ({ ...worldTimings });

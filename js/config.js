@@ -13,6 +13,11 @@ export const defaultServerUrl = (() => {
 export const VIEW_RADIUS_MIN = 1;
 export const VIEW_RADIUS_MAX = 32;
 export const VIEW_RADIUS_UNLIMITED = 32;
+export const UNLIMITED_CHUNK_CAP = (() => {
+  const raw = Number(urlParams.get("chunkcap"));
+  if (Number.isFinite(raw) && raw > 0) return Math.round(raw);
+  return 1024;
+})();
 
 export const WORLD_MAX_HEIGHT = 64;
 export const SEA_LEVEL = 16;

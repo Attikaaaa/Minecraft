@@ -6,12 +6,13 @@ import { killPlayer, player, teleportPlayer } from "./player.js";
 import { spawnMob, getMobDefs } from "./mobs.js";
 import { THREE } from "./scene.js";
 import { setTimeOfDay } from "./time.js";
-import { network, sendAction, sendChat } from "./network.js";
+import { network, requestSnapshot, sendAction, sendChat } from "./network.js";
 import { clamp, randomSeed, WORLD_MAX_HEIGHT } from "./config.js";
 import { blockDefs } from "./textures.js";
 import { isWithinWorld, setBlock } from "./world.js";
 import { getRemotePlayers } from "./remote-players.js";
 import { getPerfStats } from "./perf.js";
+import { isActionKey } from "./keybinds.js";
 
 const chatEl = document.getElementById("chat");
 const chatMessagesEl = document.getElementById("chat-messages");
@@ -423,6 +424,15 @@ registerCommand("flyspeed", "Repülés sebesség (creative/spectator)", "/flyspe
   addChatMessage(`Fly sebesség beállítva: ${state.flySpeed.toFixed(2)}x`, "system");
 });
 
+registerCommand("resync", "Világ újraszinkronizálása hostról", "/resync", () => {
+  if (!network.connected) {
+    addChatMessage("Nincs aktív multiplayer kapcsolat.", "system");
+    return;
+  }
+  requestSnapshot();
+  addChatMessage("Szinkron kérés elküldve a hostnak...", "system");
+});
+
 registerCommand("kill", "Azonnali halál", "/kill", () => {
   killPlayer();
 });
@@ -613,12 +623,22 @@ export const updateChatDisplay = () => {
 updateChatDisplay.lastUpdate = 0;
 
 window.addEventListener("keydown", (event) => {
-  if (state.chatOpen || state.inventoryOpen || state.craftingTableOpen || state.furnaceOpen || state.chestOpen) return;
+  if (
+    state.chatOpen ||
+    state.inventoryOpen ||
+    state.craftingTableOpen ||
+    state.furnaceOpen ||
+    state.chestOpen ||
+    state.keybindsOpen ||
+    state.helpOpen
+  ) {
+    return;
+  }
   if (state.mode !== "playing") return;
-  if (event.code === "KeyT") {
+  if (isActionKey("chat", event.code)) {
     openChat("");
     event.preventDefault();
-  } else if (event.code === "Slash") {
+  } else if (isActionKey("command", event.code)) {
     openChat("/");
     event.preventDefault();
   }

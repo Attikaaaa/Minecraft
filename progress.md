@@ -214,3 +214,11 @@ Teszt:
 - applySnapshot bővítve mentésből történő block apply-hez (skipSave), spawnInitialMobs csak friss világban.
 - World edit delta nyilvántartás (js/world.js) + save skip a teszt/preview módokban.
 - Playwright futtatva: output/web-game/shot-0.png + state-0.json OK.
+- Multiplayer resync: kliens snapshot kezelő + /resync parancs, request_snapshot kliens oldalon.
+- Playwright futtatva: output/web-game (shot-0.png, shot-1.png).
+- Hang/visszajelzés: új sfx modul (place/break/hurt/eat/door/chest/furnace), részecske törés effekt + crack overlay.
+- Playwright futtatva: output/web-game (shot-0.png, shot-1.png).
+- Keybind rendszer: új keybinds modul, billentyűk menü + reset, dinamikus súgó overlay, új Súgó gombok (menü/pause), inputok keybind alapján.
+- Playwright futtatva: output/web-game (shot-0.png, shot-1.png).
+- Végtelen látótáv memóriakorlát: UNLIMITED_CHUNK_CAP + chunk eviction, evicted queue guard, world edit index újragenerálás chunk újraépítéshez.
+- Playwright futtatva: output/web-game (shot-0.png, shot-1.png).

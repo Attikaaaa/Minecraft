@@ -55,6 +55,7 @@ import {
   menuResumeBtn,
   menuRestartBtn,
   menuWorldsBtn,
+  menuHelpBtn,
   optionsBackBtn,
   optionsDebugBtn,
   optionsFovEl,
@@ -65,12 +66,23 @@ import {
   optionsFullscreenBtn,
   optionsMenuEl,
   optionsPerfBtn,
+  optionsSfxBtn,
   optionsSensitivityEl,
   optionsSensitivityValueEl,
+  optionsKeybindsBtn,
+  keybindsMenuEl,
+  keybindsListEl,
+  keybindsHintEl,
+  keybindsBackBtn,
+  keybindsResetBtn,
+  helpMenuEl,
+  helpListEl,
+  helpBackBtn,
   pauseMenuEl,
   pauseMultiplayerBtn,
   pauseOptionsBtn,
   pauseWorldsBtn,
+  pauseHelpBtn,
   pauseQuitBtn,
   pauseResumeBtn,
   startBtn,
@@ -148,6 +160,18 @@ import { updateFurnaces } from "./furnace.js";
 import { closeFurnace, handleFurnaceMouseMove, openFurnace, updateFurnaceCursor, updateFurnaceUI } from "./furnace-ui.js";
 import { openChest, closeChest, updateChestCursor, updateChestUI } from "./chest-ui.js";
 import { plantCrop, syncCropsFromEdits, updateCrops } from "./farming.js";
+import { updateParticles } from "./effects.js";
+import { playSfx, setSfxEnabled } from "./sfx.js";
+import {
+  KEYBIND_ACTIONS,
+  findActionByKey,
+  getKeybind,
+  getKeybindDisplay,
+  isActionKey,
+  loadKeybinds,
+  resetKeybinds,
+  setKeybind,
+} from "./keybinds.js";
 import {
   applySavePayload,
   buildSavePayload,
@@ -253,6 +277,9 @@ const updateOptionsUI = () => {
   if (optionsPerfBtn) {
     optionsPerfBtn.textContent = `Perf overlay: ${isPerfOverlayEnabled() ? "Be" : "Ki"}`;
   }
+  if (optionsSfxBtn) {
+    optionsSfxBtn.textContent = `Hangok: ${state.sfxEnabled ? "Be" : "Ki"}`;
+  }
   if (optionsFullscreenBtn) {
     const active = Boolean(document.fullscreenElement);
     optionsFullscreenBtn.textContent = active ? "Kilépés teljes képernyőből" : "Teljes képernyő";
@@ -267,6 +294,7 @@ const saveSettings = () => {
       viewRadius: state.viewRadius,
       unlimitedViewDistance: state.unlimitedViewDistance,
       debugHud: state.debugHud,
+      sfxEnabled: state.sfxEnabled,
       perfOverlay: isPerfOverlayEnabled(),
     };
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(payload));
@@ -290,6 +318,8 @@ const applySettings = (settings) => {
   state.viewRadius = Number.isFinite(nextViewRadius) ? Math.round(nextViewRadius) : CHUNK_RADIUS;
   state.unlimitedViewDistance = unlimited;
   state.debugHud = Boolean(settings?.debugHud ?? state.debugHud);
+  state.sfxEnabled = Boolean(settings?.sfxEnabled ?? state.sfxEnabled);
+  setSfxEnabled(state.sfxEnabled);
   camera.fov = state.fov;
   camera.updateProjectionMatrix();
   updateFogDistance();
@@ -310,6 +340,7 @@ const loadSettings = () => {
     viewRadius: state.viewRadius,
     unlimitedViewDistance: state.unlimitedViewDistance,
     debugHud: state.debugHud,
+    sfxEnabled: state.sfxEnabled,
     perfOverlay: false,
   };
   let next = defaults;
@@ -711,8 +742,12 @@ const openPauseMenu = () => {
   if (state.mode !== "playing") return;
   state.mode = "paused";
   state.optionsOpen = false;
+  state.keybindsOpen = false;
+  state.helpOpen = false;
   pauseMenuEl?.classList.remove("hidden");
   optionsMenuEl?.classList.add("hidden");
+  keybindsMenuEl?.classList.add("hidden");
+  helpMenuEl?.classList.add("hidden");
   setHudVisible(false);
   unlockPointer();
   resetInputState();
@@ -741,6 +776,111 @@ const closeOptionsMenu = () => {
   state.optionsOpen = false;
   optionsMenuEl?.classList.add("hidden");
   pauseMenuEl?.classList.remove("hidden");
+};
+
+let keybindCapture = null;
+
+const renderKeybindsList = () => {
+  if (!keybindsListEl) return;
+  keybindsListEl.innerHTML = "";
+  for (const action of KEYBIND_ACTIONS) {
+    const row = document.createElement("div");
+    row.className = "keybind-row";
+    const label = document.createElement("div");
+    label.textContent = action.label;
+    const button = document.createElement("button");
+    button.className = "menu-button keybind-key";
+    button.dataset.action = action.id;
+    button.textContent = getKeybindDisplay(action.id);
+    row.append(label, button);
+    keybindsListEl.append(row);
+  }
+};
+
+const setKeybindCapture = (action) => {
+  keybindCapture = action;
+  if (keybindsHintEl) {
+    const actionLabel = KEYBIND_ACTIONS.find((item) => item.id === action)?.label || action;
+    keybindsHintEl.textContent = `Nyomj meg egy billentyűt (${actionLabel})...`;
+    keybindsHintEl.classList.remove("hidden");
+  }
+};
+
+const clearKeybindCapture = () => {
+  keybindCapture = null;
+  if (keybindsHintEl) keybindsHintEl.classList.add("hidden");
+  renderKeybindsList();
+};
+
+const openKeybindsMenu = () => {
+  if (state.mode !== "paused") return;
+  state.keybindsOpen = true;
+  optionsMenuEl?.classList.add("hidden");
+  keybindsMenuEl?.classList.remove("hidden");
+  renderKeybindsList();
+  clearKeybindCapture();
+};
+
+const closeKeybindsMenu = () => {
+  if (state.mode !== "paused") return;
+  state.keybindsOpen = false;
+  keybindsMenuEl?.classList.add("hidden");
+  optionsMenuEl?.classList.remove("hidden");
+  clearKeybindCapture();
+};
+
+const renderHelpList = () => {
+  if (!helpListEl) return;
+  helpListEl.innerHTML = "";
+  const entries = [
+    { label: "Nézés", value: "Egér" },
+    { label: "Mozgás", value: `${getKeybindDisplay("forward")} / ${getKeybindDisplay("backward")} / ${getKeybindDisplay("left")} / ${getKeybindDisplay("right")}` },
+    { label: "Ugrás", value: getKeybindDisplay("jump") },
+    { label: "Sprint", value: getKeybindDisplay("sprint") },
+    { label: "Bányászás", value: "Bal klikk (tartva)" },
+    { label: "Használat/Lerakás", value: "Jobb klikk" },
+    { label: "Hotbar", value: "1–9 / görgő" },
+    { label: "Inventory", value: getKeybindDisplay("inventory") },
+    { label: "Chat", value: getKeybindDisplay("chat") },
+    { label: "Parancs", value: getKeybindDisplay("command") },
+    { label: "Játék menü", value: getKeybindDisplay("pause") },
+    { label: "Fullscreen", value: getKeybindDisplay("fullscreen") },
+    { label: "Debug HUD", value: getKeybindDisplay("debug") },
+    { label: "Perf overlay", value: getKeybindDisplay("perf") },
+  ];
+  for (const entry of entries) {
+    const row = document.createElement("div");
+    row.className = "help-row";
+    const label = document.createElement("div");
+    label.textContent = entry.label;
+    const value = document.createElement("div");
+    value.textContent = entry.value;
+    row.append(label, value);
+    helpListEl.append(row);
+  }
+};
+
+let helpReturn = "pause";
+const openHelpMenu = (source = "pause") => {
+  state.helpOpen = true;
+  helpReturn = source;
+  menu?.classList.add("hidden");
+  pauseMenuEl?.classList.add("hidden");
+  optionsMenuEl?.classList.add("hidden");
+  keybindsMenuEl?.classList.add("hidden");
+  helpMenuEl?.classList.remove("hidden");
+  unlockPointer();
+  renderHelpList();
+};
+
+const closeHelpMenu = () => {
+  state.helpOpen = false;
+  helpMenuEl?.classList.add("hidden");
+  if (helpReturn === "menu") {
+    menu?.classList.remove("hidden");
+  } else {
+    pauseMenuEl?.classList.remove("hidden");
+  }
 };
 
 const renderWorldList = () => {
@@ -849,9 +989,13 @@ const openMainMenu = () => {
   state.mode = "menu";
   state.optionsOpen = false;
   state.worldMenuOpen = false;
+  state.keybindsOpen = false;
+  state.helpOpen = false;
   worldsMenuEl?.classList.add("hidden");
   pauseMenuEl?.classList.add("hidden");
   optionsMenuEl?.classList.add("hidden");
+  keybindsMenuEl?.classList.add("hidden");
+  helpMenuEl?.classList.add("hidden");
   menu?.classList.remove("hidden");
   setHudVisible(false);
   unlockPointer();
@@ -1146,6 +1290,7 @@ const applyDebugState = () => {
 };
 
 loadSettings();
+loadKeybinds();
 loadMultiplayerSettings();
 if (window.location.host) {
   const proto = window.location.protocol === "https:" ? "wss" : "ws";
@@ -1229,12 +1374,45 @@ optionsPerfBtn?.addEventListener("click", () => {
   togglePerfOverlayWithSave();
 });
 
+optionsSfxBtn?.addEventListener("click", () => {
+  state.sfxEnabled = !state.sfxEnabled;
+  setSfxEnabled(state.sfxEnabled);
+  saveSettings();
+  updateOptionsUI();
+});
+
 optionsFullscreenBtn?.addEventListener("click", () => {
   toggleFullscreen();
 });
 
+optionsKeybindsBtn?.addEventListener("click", () => {
+  openKeybindsMenu();
+});
+
 optionsBackBtn?.addEventListener("click", () => {
   closeOptionsMenu();
+});
+
+keybindsListEl?.addEventListener("click", (event) => {
+  const target = event.target.closest("button");
+  if (!target || !keybindsListEl.contains(target)) return;
+  const action = target.dataset.action;
+  if (!action) return;
+  setKeybindCapture(action);
+});
+
+keybindsResetBtn?.addEventListener("click", () => {
+  resetKeybinds();
+  renderKeybindsList();
+  renderHelpList();
+});
+
+keybindsBackBtn?.addEventListener("click", () => {
+  closeKeybindsMenu();
+});
+
+helpBackBtn?.addEventListener("click", () => {
+  closeHelpMenu();
 });
 
 mpHostBtn?.addEventListener("click", () => {
@@ -1269,6 +1447,10 @@ pauseWorldsBtn?.addEventListener("click", () => {
   openWorldMenu();
 });
 
+pauseHelpBtn?.addEventListener("click", () => {
+  openHelpMenu("pause");
+});
+
 pauseQuitBtn?.addEventListener("click", () => {
   saveNow("quit");
   openMainMenu();
@@ -1284,6 +1466,10 @@ menuRestartBtn?.addEventListener("click", () => {
 
 menuWorldsBtn?.addEventListener("click", () => {
   openWorldMenu();
+});
+
+menuHelpBtn?.addEventListener("click", () => {
+  openHelpMenu("menu");
 });
 
 worldCreateBtn?.addEventListener("click", () => {
@@ -1381,6 +1567,12 @@ setNetworkHandlers({
   onHostChange: () => {
     state.multiplayer.isHost = network.isHost;
     updateMultiplayerUI();
+  },
+  onSnapshot: (snapshot) => {
+    if (!snapshot) return;
+    clearRemotePlayers();
+    applySnapshot(snapshot);
+    addChatMessage("Világ újraszinkronizálva.", "system");
   },
   onDisconnect: () => {
     state.multiplayer.connected = false;
@@ -1515,32 +1707,63 @@ canvas?.addEventListener("click", () => {
 });
 
 window.addEventListener("keydown", (event) => {
+  if (state.keybindsOpen) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (event.code === "Escape") {
+      if (keybindCapture) {
+        clearKeybindCapture();
+      } else {
+        closeKeybindsMenu();
+      }
+      return;
+    }
+    if (keybindCapture) {
+      const previous = getKeybind(keybindCapture);
+      const conflict = findActionByKey(event.code);
+      if (conflict && conflict !== keybindCapture) {
+        setKeybind(conflict, previous);
+      }
+      setKeybind(keybindCapture, event.code);
+      clearKeybindCapture();
+      renderHelpList();
+    }
+    return;
+  }
+  if (state.helpOpen) {
+    if (event.code === "Escape" || isActionKey("pause", event.code)) {
+      closeHelpMenu();
+    }
+    event.preventDefault();
+    return;
+  }
   if (isChatOpen()) {
     if (event.code === "Escape") closeChat();
     return;
   }
   if (state.worldMenuOpen) {
-    if (event.code === "Escape") {
+    if (event.code === "Escape" || isActionKey("pause", event.code)) {
       closeWorldMenu();
     }
     return;
   }
   if (state.furnaceOpen) {
-    if (event.code === "Escape" || event.code === "KeyE" || event.code === "KeyI") {
+    if (event.code === "Escape" || isActionKey("inventory", event.code)) {
       closeFurnace();
     }
     return;
   }
   if (state.chestOpen) {
-    if (event.code === "Escape" || event.code === "KeyE" || event.code === "KeyI") {
+    if (event.code === "Escape" || isActionKey("inventory", event.code)) {
       closeChest();
     }
     return;
   }
 
   if (state.mode === "paused") {
-    if (event.code === "Escape") {
-      if (state.optionsOpen) closeOptionsMenu();
+    if (event.code === "Escape" || isActionKey("pause", event.code)) {
+      if (state.keybindsOpen) closeKeybindsMenu();
+      else if (state.optionsOpen) closeOptionsMenu();
       else closePauseMenu();
     }
     return;
@@ -1555,7 +1778,7 @@ window.addEventListener("keydown", (event) => {
   }
 
   // Dupla W nyomás sprint (Minecraft mechanika)
-  if (event.code === "KeyW" || event.code === "ArrowUp") {
+  if (isActionKey("forward", event.code)) {
     const now = Date.now();
     if (!input.forward && now - input.lastWPress < 300) {
       // Dupla W nyomás 300ms-en belül
@@ -1565,11 +1788,11 @@ window.addEventListener("keydown", (event) => {
     input.forward = true;
   }
   
-  if (event.code === "KeyS" || event.code === "ArrowDown") input.backward = true;
-  if (event.code === "KeyA" || event.code === "ArrowLeft") input.left = true;
-  if (event.code === "KeyD" || event.code === "ArrowRight") input.right = true;
-  if (event.code === "Space") input.jump = true;
-  if (event.code === "ShiftLeft") input.sprint = true;
+  if (isActionKey("backward", event.code)) input.backward = true;
+  if (isActionKey("left", event.code)) input.left = true;
+  if (isActionKey("right", event.code)) input.right = true;
+  if (isActionKey("jump", event.code)) input.jump = true;
+  if (isActionKey("sprint", event.code)) input.sprint = true;
   
   // Ctrl is sprint (Minecraft 1.15+)
   if (event.code === "ControlLeft" || event.code === "ControlRight") {
@@ -1577,9 +1800,9 @@ window.addEventListener("keydown", (event) => {
     input.boost = true;
   }
   
-  if (event.code === "KeyF") toggleFullscreen();
-  if (event.code === "F3") toggleDebugHud();
-  if (event.code === "F4") togglePerfOverlayWithSave();
+  if (isActionKey("fullscreen", event.code)) toggleFullscreen();
+  if (isActionKey("debug", event.code)) toggleDebugHud();
+  if (isActionKey("perf", event.code)) togglePerfOverlayWithSave();
 
   if (event.code.startsWith("Digit")) {
     const digit = Number(event.code.replace("Digit", ""));
@@ -1589,13 +1812,13 @@ window.addEventListener("keydown", (event) => {
     }
   }
 
-  if (event.code === "KeyE" || event.code === "KeyI") {
+  if (isActionKey("inventory", event.code)) {
     if (state.craftingTableOpen) closeCraftingTable();
     else if (state.inventoryOpen) closeInventory();
     else openInventory();
   }
 
-  if (event.code === "Escape") {
+  if (event.code === "Escape" || isActionKey("pause", event.code)) {
     if (state.craftingTableOpen) {
       closeCraftingTable();
     } else if (state.inventoryOpen) {
@@ -1608,30 +1831,31 @@ window.addEventListener("keydown", (event) => {
 
 window.addEventListener("keyup", (event) => {
   if (isChatOpen()) return;
+  if (state.keybindsOpen || state.helpOpen) return;
   if (state.mode !== "playing") return;
   if (event.code === "Tab") {
     closeTabList();
     event.preventDefault();
     return;
   }
-  if (event.code === "KeyW" || event.code === "ArrowUp") {
+  if (isActionKey("forward", event.code)) {
     input.forward = false;
     // Sprint leáll ha nem megyünk előre
     if (input.isSprinting && !input.boost) {
       input.isSprinting = false;
     }
   }
-  if (event.code === "KeyS" || event.code === "ArrowDown") {
+  if (isActionKey("backward", event.code)) {
     input.backward = false;
     // Sprint leáll ha hátra megyünk
     if (input.isSprinting) {
       input.isSprinting = false;
     }
   }
-  if (event.code === "KeyA" || event.code === "ArrowLeft") input.left = false;
-  if (event.code === "KeyD" || event.code === "ArrowRight") input.right = false;
-  if (event.code === "Space") input.jump = false;
-  if (event.code === "ShiftLeft") input.sprint = false;
+  if (isActionKey("left", event.code)) input.left = false;
+  if (isActionKey("right", event.code)) input.right = false;
+  if (isActionKey("jump", event.code)) input.jump = false;
+  if (isActionKey("sprint", event.code)) input.sprint = false;
   if (event.code === "ControlLeft" || event.code === "ControlRight") {
     input.boost = false;
     // Sprint leáll ha elengedjük a Ctrl-t (kivéve ha dupla W-vel aktiváltuk)
@@ -1644,7 +1868,7 @@ window.addEventListener("keyup", (event) => {
 window.addEventListener("wheel", (event) => {
   if (isChatOpen()) return;
   if (state.mode !== "playing") return;
-  if (state.inventoryOpen || state.craftingTableOpen || state.furnaceOpen || state.chestOpen) return;
+  if (state.inventoryOpen || state.craftingTableOpen || state.furnaceOpen || state.chestOpen || state.keybindsOpen || state.helpOpen) return;
   if (event.deltaY > 0) {
     state.selectedHotbar = (state.selectedHotbar + 1) % hotbar.length;
   } else {
@@ -1664,7 +1888,7 @@ window.addEventListener("mousemove", (event) => {
     updateChestCursor(event);
     return;
   }
-  if (state.inventoryOpen || state.craftingTableOpen) return;
+  if (state.inventoryOpen || state.craftingTableOpen || state.keybindsOpen || state.helpOpen) return;
   if (!pointerActive() || state.mode !== "playing") return;
   const sensitivity = 0.002 * state.mouseSensitivity;
   player.yaw -= event.movementX * sensitivity;
@@ -1676,7 +1900,7 @@ window.addEventListener("contextmenu", (event) => event.preventDefault());
 
 window.addEventListener("mousedown", (event) => {
   if (isChatOpen()) return;
-  if (state.inventoryOpen || state.craftingTableOpen || state.furnaceOpen || state.chestOpen) return;
+  if (state.inventoryOpen || state.craftingTableOpen || state.furnaceOpen || state.chestOpen || state.keybindsOpen || state.helpOpen) return;
   if (state.mode !== "playing" || !pointerActive()) return;
   if (state.gamemode === "spectator") return;
   if (event.button === 0) {
@@ -1718,15 +1942,18 @@ window.addEventListener("mousedown", (event) => {
       }
       if (blockType === 20) {
         openFurnace(state.targetedBlock.x, state.targetedBlock.y, state.targetedBlock.z);
+        playSfx("furnace");
         return;
       }
       if (blockType === 21) {
         openChest(state.targetedBlock.x, state.targetedBlock.y, state.targetedBlock.z);
+        playSfx("chest");
         return;
       }
       if (blockType === 22 || blockType === 23) {
         const nextType = blockType === 22 ? 23 : 22;
         setBlock(state.targetedBlock.x, state.targetedBlock.y, state.targetedBlock.z, nextType);
+        playSfx("door");
         return;
       }
       if (blockType === 33) {
@@ -1856,6 +2083,7 @@ const tick = (time) => {
           }
         },
       });
+      updateParticles(dt);
       updateRemotePlayers(dt);
       sendNetworkUpdates(now);
       if (state.furnaceOpen) {
@@ -1898,6 +2126,8 @@ window.render_game_to_text = () => {
     pauseMenuOpen: state.mode === "paused",
     optionsMenuOpen: state.mode === "paused" && state.optionsOpen,
     worldMenuOpen: Boolean(state.worldMenuOpen),
+    keybindsMenuOpen: Boolean(state.keybindsOpen),
+    helpMenuOpen: Boolean(state.helpOpen),
     furnaceOpen: Boolean(state.furnaceOpen),
     chestOpen: Boolean(state.chestOpen),
     menuOpen: state.mode === "menu",

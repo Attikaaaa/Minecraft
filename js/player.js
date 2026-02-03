@@ -47,6 +47,8 @@ import { statusIcons, blockDefs } from "./textures.js";
 import { lockPointer, unlockPointer } from "./controls.js";
 import { setTorchOrientation, removeTorchOrientation } from "./custom-blocks.js";
 import { getPerfStats } from "./perf.js";
+import { hideCrackOverlay, showCrackOverlay, spawnBlockParticles } from "./effects.js";
+import { playSfx } from "./sfx.js";
 
 const highlightGeometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(1.02, 1.02, 1.02));
 const highlightMaterial = new THREE.LineBasicMaterial({ color: 0xffff88 });
@@ -195,7 +197,9 @@ export const updatePlayer = (dt) => {
     !state.chatOpen &&
     !state.furnaceOpen &&
     !state.chestOpen &&
-    !state.worldMenuOpen;
+    !state.worldMenuOpen &&
+    !state.keybindsOpen &&
+    !state.helpOpen;
   const isCreative = state.gamemode === "creative";
   const isSpectator = state.gamemode === "spectator";
 
@@ -394,6 +398,7 @@ export const resetMining = () => {
   miningBarEl.classList.add("hidden");
   miningFillEl.style.width = "0%";
   highlightMaterial.color.set(0xffff88);
+  hideCrackOverlay();
 };
 
 const completeMining = (blockType) => {
@@ -401,6 +406,9 @@ const completeMining = (blockType) => {
   const tx = state.targetedBlock.x;
   const ty = state.targetedBlock.y;
   const tz = state.targetedBlock.z;
+
+  spawnBlockParticles(blockType, tx, ty, tz, 14);
+  playSfx("break");
   
   // Torch orientáció törlése
   if (blockType === 18) {
@@ -498,6 +506,7 @@ export const updateMining = (dt) => {
   miningBarEl.classList.remove("hidden");
   miningFillEl.style.width = `${progress * 100}%`;
   highlightMaterial.color.setHSL(0.12 - progress * 0.12, 1, 0.65);
+  showCrackOverlay(state.targetedBlock, state.targetedFace, progress);
 
   if (state.mining.progress >= 1) {
     completeMining(blockType);
@@ -505,6 +514,7 @@ export const updateMining = (dt) => {
     state.mining.targetKey = null;
     state.mining.blockType = null;
     miningFillEl.style.width = "0%";
+    hideCrackOverlay();
   }
 };
 
@@ -548,6 +558,7 @@ const triggerDeath = () => {
 export const takeDamage = (amount) => {
   if (state.mode !== "playing") return;
   if (state.gamemode === "creative" || state.gamemode === "spectator") return;
+  playSfx("hurt");
   const armor = getArmorValue();
   const reduction = Math.min(0.8, armor * 0.04);
   const finalAmount = Math.max(0.5, amount * (1 - reduction));
@@ -695,6 +706,7 @@ export const placeBlock = () => {
   }
   
   setBlock(x, y, z, blockType);
+  playSfx("place");
   if (state.gamemode !== "creative") {
     selectedSlot.count -= 1;
     if (selectedSlot.count <= 0) setSlot(selectedSlot, null, 0);
@@ -713,6 +725,7 @@ export const tryConsumeFood = () => {
   }
   if (player.hunger >= 20) return false;
   player.hunger = Math.min(20, player.hunger + def.food);
+  playSfx("eat");
   selectedSlot.count -= 1;
   if (selectedSlot.count <= 0) setSlot(selectedSlot, null, 0);
   updateAllSlotsUI();

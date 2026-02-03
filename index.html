@@ -19,6 +19,7 @@
           <button id="menu-resume-btn" class="menu-button">Játék folytatása</button>
           <button id="menu-restart-btn" class="menu-button">Új világ</button>
           <button id="menu-worlds-btn" class="menu-button">Világok</button>
+          <button id="menu-help-btn" class="menu-button">Súgó</button>
         </div>
       </div>
       <div id="hud" class="hidden">
@@ -55,6 +56,7 @@
           <button id="pause-mp-btn" class="menu-button">Multiplayer</button>
           <button id="pause-options-btn" class="menu-button">Beállítások...</button>
           <button id="pause-worlds-btn" class="menu-button">Világok</button>
+          <button id="pause-help-btn" class="menu-button">Súgó</button>
           <button id="pause-quit-btn" class="menu-button">Mentés és kilépés</button>
         </div>
       </div>
@@ -81,9 +83,29 @@
           <button id="options-unlimited-view-btn" class="menu-button">Végtelen látótáv: Ki</button>
           <button id="options-debug-btn" class="menu-button">Debug HUD: Ki</button>
           <button id="options-perf-btn" class="menu-button">Perf overlay: Ki</button>
+          <button id="options-sfx-btn" class="menu-button">Hangok: Be</button>
           <button id="options-fullscreen-btn" class="menu-button">Teljes képernyő</button>
+          <button id="options-keybinds-btn" class="menu-button">Billentyűk...</button>
         </div>
         <button id="options-back-btn" class="menu-button">Vissza</button>
+      </div>
+    </div>
+    <div id="keybinds-menu" class="overlay hidden">
+      <div class="panel menu-panel keybinds-panel">
+        <h2>Billentyűk</h2>
+        <div id="keybinds-hint" class="keybinds-hint hidden">Nyomj meg egy billentyűt...</div>
+        <div id="keybinds-list" class="keybinds-list"></div>
+        <div class="menu-buttons">
+          <button id="keybinds-reset-btn" class="menu-button">Alapértelmezett</button>
+          <button id="keybinds-back-btn" class="menu-button">Vissza</button>
+        </div>
+      </div>
+    </div>
+    <div id="help-menu" class="overlay hidden">
+      <div class="panel menu-panel help-panel">
+        <h2>Súgó</h2>
+        <div id="help-list" class="help-list"></div>
+        <button id="help-back-btn" class="menu-button">Vissza</button>
       </div>
     </div>
     <div id="multiplayer-menu" class="overlay hidden">
