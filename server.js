@@ -185,8 +185,9 @@ const setHost = (room, clientId) => {
 };
 
 const removeClient = (room, clientId) => {
+  const client = room.clients.get(clientId);
   room.clients.delete(clientId);
-  broadcast(room, { type: "player_leave", id: clientId });
+  broadcast(room, { type: "player_leave", id: clientId, name: client?.name || null });
   scheduleSave(room);
   if (room.hostId === clientId) {
     const next = room.clients.keys().next();

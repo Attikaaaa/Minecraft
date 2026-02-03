@@ -1595,6 +1595,15 @@ if (urlParams.get("test") === "1") {
     setBlock: (x, y, z, type) => setBlock(x, y, z, type),
     spawnItem: (id, count, x, y, z) => spawnItemDrop(id, count, x, y, z),
     teleport: (x, y, z) => teleportPlayer(x, y, z),
+    attackPlayer: (targetId, amount = 2) => {
+      if (!network.connected || !targetId) return false;
+      if (network.isHost) {
+        sendPlayerDamage(String(targetId), amount);
+      } else {
+        sendAction({ kind: "attack_player", targetId: String(targetId), amount });
+      }
+      return true;
+    },
     listItems: () =>
       itemEntities.map((entity) => ({
         entityId: entity.entityId,

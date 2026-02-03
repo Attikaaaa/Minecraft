@@ -10,6 +10,7 @@ import { network, sendAction, sendChat } from "./network.js";
 import { clamp, randomSeed, WORLD_MAX_HEIGHT } from "./config.js";
 import { blockDefs } from "./textures.js";
 import { isWithinWorld, setBlock } from "./world.js";
+import { getRemotePlayers } from "./remote-players.js";
 
 const chatEl = document.getElementById("chat");
 const chatMessagesEl = document.getElementById("chat-messages");
@@ -169,6 +170,9 @@ const stripDiacritics = (value) =>
 const normalizeKey = (value) =>
   stripDiacritics(value.trim().toLowerCase().replace(/^minecraft:/, "")).replace(/\s+/g, "_");
 
+const normalizeName = (value) =>
+  stripDiacritics(value.trim().toLowerCase());
+
 const blockNameMap = new Map();
 Object.entries(blockDefs).forEach(([id, def]) => {
   const key = normalizeKey(def.name);
@@ -293,12 +297,25 @@ registerCommand("give", "Item adása", "/give <item> [count]", (args) => {
   }
 });
 
-registerCommand("tp", "Teleport", "/tp <x> <y> <z>", (args) => {
+registerCommand("tp", "Teleport", "/tp <x> <y> <z> | /tp <player>", (args) => {
+  if (args.length === 1) {
+    const targetName = args[0];
+    const target = getRemotePlayers().find(
+      (playerInfo) => normalizeName(playerInfo.name || "") === normalizeName(targetName)
+    );
+    if (!target) {
+      showUsage("/tp <x> <y> <z> | /tp <player>");
+      return;
+    }
+    teleportPlayer(target.x, target.y, target.z);
+    addChatMessage(`Teleport: ${target.name}`, "system");
+    return;
+  }
   const x = parseCoord(args[0], player.position.x);
   const y = parseCoord(args[1], player.position.y);
   const z = parseCoord(args[2], player.position.z);
   if (x == null || y == null || z == null) {
-    showUsage("/tp <x> <y> <z>");
+    showUsage("/tp <x> <y> <z> | /tp <player>");
     return;
   }
   teleportPlayer(x, y, z);

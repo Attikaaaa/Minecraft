@@ -152,6 +152,12 @@ const run = async () => {
 
   const clientState = await connectClient(clientPage, "Client", room, serverPort);
 
+  await hostPage.waitForFunction(
+    () => Array.from(document.querySelectorAll("#chat-messages .chat-line"))
+      .some((el) => (el.textContent || "").includes("csatlakozott")),
+    { timeout: 5000 }
+  );
+
   await sleep(800);
 
   // Player sync test: move host forward
@@ -167,6 +173,42 @@ const run = async () => {
     const data = JSON.parse(window.render_game_to_text());
     return data?.multiplayer?.players?.length > 0;
   }, { timeout: 5000 });
+
+  const hostStateAfterSync = await getState(hostPage);
+  const clientEntry = hostStateAfterSync.multiplayer.players.find((playerInfo) => playerInfo.name === "Client");
+
+  // Teleport to player test
+  let teleportOk = false;
+  if (clientEntry) {
+    await hostPage.keyboard.press("KeyT");
+    await hostPage.keyboard.type(`/tp ${clientEntry.name}`);
+    await hostPage.keyboard.press("Enter");
+    await hostPage.waitForFunction(
+      (pos) => {
+        const data = JSON.parse(window.render_game_to_text());
+        const dx = data.player.x - pos.x;
+        const dy = data.player.y - pos.y;
+        const dz = data.player.z - pos.z;
+        return Math.hypot(dx, dy, dz) < 0.6;
+      },
+      clientEntry,
+      { timeout: 5000 }
+    );
+    teleportOk = true;
+  }
+
+  // Player attack test (host -> client)
+  const clientHealthBefore = (await getState(clientPage)).player.health;
+  let clientHealthAfter = clientHealthBefore;
+  if (clientEntry?.id) {
+    await hostPage.evaluate((id) => window.__test.attackPlayer(id, 4), clientEntry.id);
+    await clientPage.waitForFunction(
+      (prev) => JSON.parse(window.render_game_to_text()).player.health < prev,
+      clientHealthBefore,
+      { timeout: 5000 }
+    );
+    clientHealthAfter = (await getState(clientPage)).player.health;
+  }
 
   // Block sync test (host -> client)
   const blockPos = {
@@ -239,6 +281,12 @@ const run = async () => {
   await clientPage.close();
   await sleep(800);
   const hostAfterDisconnect = await getState(hostPage);
+  await hostPage.waitForFunction(
+    () => Array.from(document.querySelectorAll("#chat-messages .chat-line"))
+      .some((el) => (el.textContent || "").includes("kilépett")),
+    { timeout: 5000 }
+  );
+  const hostChatAfterLeave = await readChatLines(hostPage);
 
   const results = {
     room,
@@ -260,6 +308,12 @@ const run = async () => {
       hostItemsAfterPickup: itemsHostAfterPickup,
     },
     chatSync: hostChat,
+    joinLeaveSync: {
+      joinMessage: hostChat.some((line) => line.includes("csatlakozott")),
+      leaveMessage: hostChatAfterLeave.some((line) => line.includes("kilépett")),
+    },
+    teleportToPlayer: teleportOk,
+    playerDamage: { before: clientHealthBefore, after: clientHealthAfter },
     disconnect: hostAfterDisconnect.multiplayer.players,
   };
 

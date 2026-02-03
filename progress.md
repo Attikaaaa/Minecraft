@@ -187,3 +187,7 @@ Teszt:
 - MP kliens auto serverUrl igazítás: ha localhost port eltér, automatikusan az aktuális host/portra áll.
 - run-multiplayer-test.mjs port autodetekcióra állítva (random port támogatás).
 - Teszt lefuttatva random porttal: reports/multiplayer-2026-02-03T18-50-31-788Z/results.json OK.
+- Multiplayer: player_leave payloadban név is; /tp parancs most tud játékosnévre teleportálni; __test.attackPlayer hook hozzáadva.
+- Multiplayer teszt script bővítve: join/leave üzenet, /tp player, PvP sebzés ellenőrzés.
+- Multiplayer teszt futtatva: reports/multiplayer-2026-02-03T19-59-57-535Z/results.json (join/leave, tp, damage OK).
+- Playwright skill kliens futtatva: output/web-game-mp-latest/shot-0.png + state-0.json ellenőrizve.
