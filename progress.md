@@ -38,3 +38,67 @@ Original prompt: Csinálj egy 3d játékot, wasd mozgas, nezes minden, minecraft
 - Életerő/éhség rendszer: 20 HP + 20 hunger, regen (hunger>=18), starvation, fall damage.
 - Death screen + respawn, HUD szívecskék és éhség ikonok.
 - Alma étel (inventory kezdéskor), jobb klikk fogyasztás.
+- Item drop entitások: bontott blokkok most sprite-ként kiesnek, gravitálnak, felvehetők közelségben; auto-pickup inventoryba.
+- Pointer lock nélkül is működik egérnézés + bányászás (Playwright / nopointerlock kompat).
+- render_game_to_text kibővítve: droppedItems lista.
+- Arrow key mozgás támogatás Playwright teszt miatt.
+- Favicon data URI, hogy ne legyen 404.
+- Playwright futtatás headless=false (output/web-game-run22): shot-0.png + state-0.json rendben.
+- main.js szétbontva modulokra a js/ mappába (config, dom, scene, noise, textures, items, world, inventory, entities, player, main).
+- Auto-start: a Start gomb eltávolítva, menü alapból rejtve, játék indul betöltéskor.
+- index.html frissítve: belépési pont js/main.js.
+- Playwright futtatva: output/web-game-run23 (auto-start képernyő rendben).
+- Inventory drag‑and‑drop: bal klikk lenyomás + húzás esetén a tárgy a cél slotba kerül (Minecraft-szerű drag).
+- Drag állapot cleanup inventory/crafting bezárásakor.
+- Playwright futtatva: output/web-game-run25.
+- Bányászási idő közelítve Minecraft 1.8 logikához: harvest level (vas/arany/gyémánt/redstone/emerald) és effektív tool külön, idő 1/20s lépésre kerekítve.
+- Playwright futtatva: output/web-game-run26.
+- Háttér optimalizáció: raycasthez mesh lista cache, item entity update során kevesebb allocáció, preallocált vektorok.
+- Playwright futtatva: output/web-game-run27.
+- Mozgás frissítve Minecraft 1.8-szerű fizikára (20 TPS, friction/accel, sprint jump boost).
+- Playwright futtatva: output/web-game-run28.
+- Állatok alap AI (tehén, malac, bárány, csirke): wander, ütközés, gravitáció, vízben felúszás, támadható, dropok.
+- Spawn egg itemek + initial mob spawn a játék elején.
+- Mob target raycast blokk-occlusionnel.
+- render_game_to_text kibővítve: mobs lista.
+- Playwright futtatva: output/web-game-run29 és output/web-game-run32 (utóbbiban mobok a state-ben).
+- Chat rendszer hozzáadva: T/Slash nyit, Enter küld, Esc bezár. Üzenetek fade, Minecraft-szerű layout.
+- Parancsok: /help, /seed, /give, /tp, /summon, /time set day|night.
+- Chat nyitáskor input lock + pointer lock feloldás, játék inputok tiltása.
+- Playwright futtatva: output/web-game-run33.
+- Chat bővítve: parancs history (fel/le), tab-os kiegészítés, parancs javaslatok a beviteli sor felett.
+- Új chat parancsok: /help [cmd], /clear, /say, /me, /gamemode, /kill, /spawnpoint, /setblock, /fill. /tp és /summon bővítve (~ koordináták, pozíció opciók).
+- Gamemode állapot bevezetve (survival/creative), kreatív módban instant break + nincs sebzés/éhség.
+- Respawn pont tárolás (state.respawnPoint) + respawn onnan.
+- render_game_to_text kibővítve: gamemode + respawnPoint.
+- Playwright futtatva: output/web-game-run34 (shot-0.png + state-0.json ellenőrizve).
+- Torch blokk + item (block id 18, item id torch). Textúra hozzáadva.
+- Day/night ciklus (config DAY_LENGTH_SECONDS), state.timeOfDay, time.js modul.
+- Scene világítás frissítve: égbolt, nap pozíció, ambient/hemi/sun intenzitás.
+- Kézben lévő item megjelenik jobb alsó sarokban (hand-item).
+- Ha torch van kézben és sötét van, torch fény (point light) bekapcsol a kameránál.
+- Chat /time parancs most a timeOfDay-t állítja (day/night).
+- Playwright futtatva: output/web-game-run35 (shot-0.png + state-0.json ellenőrizve).
+- GUI stílus Minecraft-szerűbb lett: pixel font, lapos panelek, kisebb slotok, egyszerű gombok, hotbar lejjebb, text shadow.
+- Jobb kéz item megjelenés (hand-item) illesztve a HUD-hoz.
+- Playwright futtatva: output/web-game-run36.
+- QA próbálkozás: hosszabb actions-qa.json Playwright időtúllépés (120s) -> kisebb akciócsomagra váltva.
+- Playwright futtatva: output/web-game-run38 (left/right click + basic input), hibalog nincs.
+- QA: sötétedés átmenet simább lett (scene.js daylightFactor easing).
+- Hand item most eltűnik inventory/crafting/chat nyitásakor.
+- Chat nyitás tiltva inventory/crafting alatt.
+- Playwright futtatás több akcióval: run39 (move/jump), run40 (mine), run41 (place), run38 (mouse click). run37/részletes QA próbák időtúllépésesek voltak.
+- Világ méret paraméterezése URL-ből: ?size=small|medium|large|huge vagy ?radius=1..6 (CHUNK_RADIUS beállítva).
+- Playwright futtatva: output/web-game-run42 (verifikálás).
+- Creative + Spectator logika: spectátorban nincs ütközés, repülés (Space fel, Shift le), Ctrl gyorsítás. Kreatívban repülés, de ütközés van.
+- Gamemode parancs bővítve: /gamemode survival|creative|spectator (0/1/3, s/c/sp).
+- Spectatorban nincs bányászás/lerakás/pickup.
+- Playwright futtatva: output/web-game-run43.
+- Világgenerálás overhaul: domain warp, kontinens + hegy maszk, folyó/lake vágás, nedvesség/hő biome döntés.
+- Fák ritkítása cellás eloszlással (forest bias), kevesebb tömör fa-"fal".
+- Barlangok: felszínhez igazított küszöb (ne szaggassa a felszínt), mélyebben több.
+- Ércek: 3D noise alapú sávok (kevésbé random pöttyök).
+- Playwright futtatva: output/web-game-run44.
+- Debug HUD alapból rejtett; F3 toggle. Debug URL param debug=1 bekapcsolja.
+- UI screenshotok generálva: output/web-game-hud2, inventory2, crafting2, chat2, death2, torch-night2, creative2, spectator2, minebar2.
+- HUD elhelyezés finomítva (hearts/hunger középre, status felül balra, chat bal alul).

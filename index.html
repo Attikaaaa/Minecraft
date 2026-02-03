@@ -4,28 +4,39 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Blockland 3D</title>
+    <link rel="icon" href="data:," />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <div id="ui">
-      <div id="menu" class="panel">
+      <div id="menu" class="panel hidden">
         <h1>Blockland 3D</h1>
         <p>WASD: mozgás · Egér: nézés · Space: ugrás · Shift: sprint</p>
         <p>Bal klikk: bányászás (tartva) · Jobb klikk: blokk lerakás</p>
         <p>1–9: hotbar · E: inventory · Jobb klikk munkapad: 3×3 crafting</p>
         <p>F: fullscreen · Esc: kilépés a nézetből</p>
-        <button id="start-btn">Játék indítása</button>
       </div>
       <div id="hud" class="hidden">
         <div id="crosshair">+</div>
         <div id="status"></div>
         <div id="hotbar" class="hotbar"></div>
+        <div id="hand-item" class="hidden">
+          <div id="hand-item-icon"></div>
+        </div>
         <div id="mining-bar" class="mining-bar hidden">
           <div id="mining-fill" class="mining-fill"></div>
         </div>
         <div id="survival-bars">
           <div id="hearts" class="bar"></div>
           <div id="hunger" class="bar"></div>
+        </div>
+        <div id="chat">
+          <div id="chat-messages"></div>
+          <div id="chat-suggestions" class="hidden"></div>
+          <div id="chat-input-row" class="hidden">
+            <span class="chat-prompt">&gt;</span>
+            <input id="chat-input" type="text" autocomplete="off" spellcheck="false" />
+          </div>
         </div>
       </div>
     </div>
@@ -68,6 +79,6 @@
     </div>
     <canvas id="game"></canvas>
 
-    <script type="module" src="main.js"></script>
+    <script type="module" src="js/main.js"></script>
   </body>
 </html>
