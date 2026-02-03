@@ -165,3 +165,9 @@ Original prompt: Csinálj egy 3d játékot, wasd mozgas, nezes minden, minecraft
 
 Teszt:
 - Playwright: output/web-game-mp1/shot-0.png + state-0.json (alap render OK). Multiplayer két klienssel nem volt élőben tesztelve.
+
+- Multiplayer teszt harness: scripts/run-multiplayer-test.mjs (két Playwright kliens + WS server), riport a reports/multiplayer-*/results.json.
+- __test bővítve teleporttal (test=1 param) a determinisztikus item pickup ellenőrzéshez.
+- Chat parancsok /time és /summon kliensről host actionre küldenek.
+- Entities cleanup: kliens oldali item cleanup tiltva (allowCleanup) MP-ben.
+- Teszt lefuttatva: reports/multiplayer-2026-02-03T18-37-34-140Z (join/leave, player sync, block sync, time, mob, item pickup, chat OK).

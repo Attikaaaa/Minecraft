@@ -766,8 +766,14 @@ const applyDebugState = () => {
 
 loadSettings();
 loadMultiplayerSettings();
-if (!state.multiplayer.serverUrl || state.multiplayer.serverUrl === "ws://localhost:8080") {
+if (!state.multiplayer.serverUrl) {
   if (window.location.host) {
+    const proto = window.location.protocol === "https:" ? "wss" : "ws";
+    state.multiplayer.serverUrl = `${proto}://${window.location.host}`;
+  }
+} else if (state.multiplayer.serverUrl === "ws://localhost:8080") {
+  // Only auto-align to the current host when it's actually on 8080 (server.js).
+  if (window.location.port === "8080" && window.location.host) {
     const proto = window.location.protocol === "https:" ? "wss" : "ws";
     state.multiplayer.serverUrl = `${proto}://${window.location.host}`;
   }
@@ -1351,6 +1357,7 @@ if (urlParams.get("test") === "1") {
     getBlock: (x, y, z) => getBlock(x, y, z),
     setBlock: (x, y, z, type) => setBlock(x, y, z, type),
     spawnItem: (id, count, x, y, z) => spawnItemDrop(id, count, x, y, z),
+    teleport: (x, y, z) => teleportPlayer(x, y, z),
     listItems: () =>
       itemEntities.map((entity) => ({
         entityId: entity.entityId,

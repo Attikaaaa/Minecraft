@@ -1,0 +1,37 @@
+{
+  "label": "scenario-A",
+  "scenario": "A",
+  "seed": 1337,
+  "durationMs": 30000,
+  "samples": 191,
+  "avgFps": 30.4,
+  "fps1Low": 30.3,
+  "avgFrameMs": 32.908,
+  "p99FrameMs": 33,
+  "worstFrameMs": 33,
+  "avgMs": 32.908,
+  "p99Ms": 33,
+  "fps": 30.4,
+  "drawCalls": 14,
+  "triangles": 6352,
+  "chunksRendered": 9,
+  "chunks": 9,
+  "loadedChunks": 9,
+  "queues": {
+    "dirtyChunks": 0,
+    "genQueue": 0,
+    "meshQueue": 0,
+    "waterQueue": 0
+  },
+  "dirtyChunks": 0,
+  "meshingQueue": 0,
+  "generationQueue": 0,
+  "waterQueue": 0,
+  "timingsMs": {
+    "render": 0.376,
+    "worldTick": 1.711,
+    "meshingApply": 1.185,
+    "waterTick": 0.004,
+    "ui": 0.128
+  }
+}

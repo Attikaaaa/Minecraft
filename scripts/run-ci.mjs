@@ -230,8 +230,8 @@ const captureCraftingScreenshot = async (browser, baseUrl, screenshotDir) => {
 const waitForBenchResult = async (page, scenario) => {
   await page.waitForFunction(
     (sc) => window.__BENCH_RESULT && window.__BENCH_RESULT.scenario === sc,
-    { timeout: 70000 },
     scenario,
+    { timeout: 70000 },
   );
   return page.evaluate(() => window.__BENCH_RESULT);
 };

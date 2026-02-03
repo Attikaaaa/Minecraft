@@ -191,7 +191,7 @@ const run = async () => {
   const hostBlock = await hostPage.evaluate((pos) => window.__test.getBlock(pos.x, pos.y, pos.z), clientBlockPos);
 
   // Time sync test
-  await hostPage.keyboard.press("Slash");
+  await hostPage.keyboard.press("KeyT");
   await hostPage.keyboard.type("/time set night");
   await hostPage.keyboard.press("Enter");
   await clientPage.waitForFunction(() => {
@@ -201,23 +201,25 @@ const run = async () => {
   const timeClient = await getState(clientPage);
 
   // Mob sync test
-  await hostPage.keyboard.press("Slash");
+  await hostPage.keyboard.press("KeyT");
   await hostPage.keyboard.type("/summon cow");
   await hostPage.keyboard.press("Enter");
   await clientPage.waitForFunction(() => window.__test.listMobs().length > 0, { timeout: 5000 });
   const mobsClient = await clientPage.evaluate(() => window.__test.listMobs());
 
-  // Item sync test (host spawn near client)
+  // Item sync test (host spawn on client position)
   const clientPos = clientStateAfterMove.player;
-  await hostPage.evaluate((pos) => window.__test.spawnItem("plank", 1, pos.x + 1, pos.y, pos.z), clientPos);
+  await hostPage.evaluate((pos) => window.__test.spawnItem("plank", 1, pos.x + 3, pos.y, pos.z), clientPos);
   await clientPage.waitForFunction(() => window.__test.listItems().length > 0, { timeout: 5000 });
   const itemsClient = await clientPage.evaluate(() => window.__test.listItems());
+  const itemsHostBeforePickup = await hostPage.evaluate(() => window.__test.listItems());
 
-  // Item pickup sync: move client onto item to pickup, then check host list
-  await clientPage.keyboard.down("KeyW");
-  await sleep(500);
-  await clientPage.keyboard.up("KeyW");
-  await sleep(1500);
+  // Item pickup sync: teleport client onto the item
+  if (itemsClient.length > 0) {
+    const item = itemsClient[0];
+    await clientPage.evaluate((it) => window.__test.teleport(it.x, it.y, it.z), item);
+  }
+  await sleep(1200);
   const itemsHostAfterPickup = await hostPage.evaluate(() => window.__test.listItems());
 
   // Chat sync test
@@ -246,7 +248,11 @@ const run = async () => {
     },
     timeSync: { clientTime: timeClient.timeOfDay },
     mobSync: mobsClient,
-    itemSync: { clientItemsAfterSpawn: itemsClient, hostItemsAfterPickup: itemsHostAfterPickup },
+    itemSync: {
+      clientItemsAfterSpawn: itemsClient,
+      hostItemsBeforePickup: itemsHostBeforePickup,
+      hostItemsAfterPickup: itemsHostAfterPickup,
+    },
     chatSync: hostChat,
     disconnect: hostAfterDisconnect.multiplayer.players,
   };
