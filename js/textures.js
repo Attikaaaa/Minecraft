@@ -54,6 +54,7 @@ const loadAnimatedTexture = (path, frameCount = 32, frametime = 2) => {
           currentFrame: 0,
           timer: 0
         };
+        setAnimatedTextureFrameCanvas(texture, 0);
         resolve(texture);
       },
       undefined,
@@ -74,6 +75,103 @@ const loadAnimatedTexture = (path, frameCount = 32, frametime = 2) => {
 
 const makeMat = (texture, opts = {}) =>
   new THREE.MeshLambertMaterial({ map: texture, ...opts });
+
+const makeCanvasTexture = (drawFn) => {
+  const canvas = document.createElement("canvas");
+  canvas.width = 16;
+  canvas.height = 16;
+  const ctx = canvas.getContext("2d");
+  drawFn(ctx, canvas);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.magFilter = THREE.NearestFilter;
+  texture.minFilter = THREE.NearestFilter;
+  texture.generateMipmaps = false;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.flipY = false;
+  return texture;
+};
+
+const cloneTextureWithTint = (source, tint) => {
+  if (!source || !source.image) return null;
+  const canvas = document.createElement("canvas");
+  const width = source.image.width || 16;
+  const height = source.image.height || 16;
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(source.image, 0, 0, width, height);
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const data = imageData.data;
+  const tintR = (tint >> 16) & 255;
+  const tintG = (tint >> 8) & 255;
+  const tintB = tint & 255;
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = Math.round((data[i] * tintR) / 255);
+    data[i + 1] = Math.round((data[i + 1] * tintG) / 255);
+    data[i + 2] = Math.round((data[i + 2] * tintB) / 255);
+  }
+  ctx.putImageData(imageData, 0, 0);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.magFilter = THREE.NearestFilter;
+  texture.minFilter = THREE.NearestFilter;
+  texture.generateMipmaps = false;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.flipY = false;
+  return texture;
+};
+
+const makeSeamlessEdges = (canvas) => {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const width = canvas.width;
+  const height = canvas.height;
+  if (!width || !height) return;
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const data = imageData.data;
+  const idx = (x, y) => (y * width + x) * 4;
+  for (let x = 0; x < width; x += 1) {
+    const src = idx(x, 0);
+    const dst = idx(x, height - 1);
+    data[dst] = data[src];
+    data[dst + 1] = data[src + 1];
+    data[dst + 2] = data[src + 2];
+    data[dst + 3] = data[src + 3];
+  }
+  for (let y = 0; y < height; y += 1) {
+    const src = idx(0, y);
+    const dst = idx(width - 1, y);
+    data[dst] = data[src];
+    data[dst + 1] = data[src + 1];
+    data[dst + 2] = data[src + 2];
+    data[dst + 3] = data[src + 3];
+  }
+  const topLeft = idx(0, 0);
+  const bottomRight = idx(width - 1, height - 1);
+  data[bottomRight] = data[topLeft];
+  data[bottomRight + 1] = data[topLeft + 1];
+  data[bottomRight + 2] = data[topLeft + 2];
+  data[bottomRight + 3] = data[topLeft + 3];
+  ctx.putImageData(imageData, 0, 0);
+};
+
+const setAnimatedTextureFrameCanvas = (texture, frameIndex = 0) => {
+  if (!texture || !texture.image) return;
+  const width = texture.image.width || 16;
+  const frameHeight = width;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = frameHeight;
+  const ctx = canvas.getContext("2d");
+  const sy = frameIndex * frameHeight;
+  ctx.drawImage(texture.image, 0, sy, width, frameHeight, 0, 0, width, frameHeight);
+  makeSeamlessEdges(canvas);
+  texture.userData = texture.userData || {};
+  texture.userData.sourceCanvas = canvas;
+};
 
 const applyTintToTexture = (texture, color) => {
   if (!texture || !texture.image) return;
@@ -134,6 +232,11 @@ export const loadAllTextures = async () => {
     loadTextureFromFile('textures/emerald_ore.png'),
     loadTextureFromFile('textures/torch.png'),
     loadTextureFromFile('textures/block/bedrock.png'),
+    loadTextureFromFile('textures/block/blast_furnace_side.png'),
+    loadTextureFromFile('textures/block/blast_furnace_top.png'),
+    loadTextureFromFile('textures/block/blast_furnace_front.png'),
+    loadTextureFromFile('textures/block/acacia_door_bottom.png'),
+    loadTextureFromFile('textures/block/blue_stained_glass.png'),
   ]);
   
   textures = {
@@ -161,8 +264,68 @@ export const loadAllTextures = async () => {
     emeraldOre: textureList[21],
     torch: textureList[22],
     bedrock: textureList[23],
+    furnaceSide: textureList[24],
+    furnaceTop: textureList[25],
+    furnaceFront: textureList[26],
+    door: textureList[27],
+    glass: textureList[28],
   };
 
+  textures.farmlandTop = cloneTextureWithTint(textures.dirt, 0x6b4b2a);
+  textures.ladder = makeCanvasTexture((ctx) => {
+    ctx.fillStyle = "#8b5a2b";
+    ctx.fillRect(0, 0, 16, 16);
+    ctx.fillStyle = "#6f4420";
+    ctx.fillRect(2, 2, 12, 2);
+    ctx.fillRect(2, 7, 12, 2);
+    ctx.fillRect(2, 12, 12, 2);
+    ctx.fillStyle = "#a46b35";
+    ctx.fillRect(3, 0, 2, 16);
+    ctx.fillRect(11, 0, 2, 16);
+  });
+  textures.wheatStages = [
+    makeCanvasTexture((ctx) => {
+      ctx.clearRect(0, 0, 16, 16);
+      ctx.fillStyle = "rgba(0,0,0,0)";
+      ctx.fillRect(0, 0, 16, 16);
+      ctx.fillStyle = "rgba(90, 143, 63, 0.9)";
+      ctx.fillRect(6, 9, 4, 5);
+      ctx.fillRect(4, 11, 2, 3);
+      ctx.fillRect(10, 11, 2, 3);
+    }),
+    makeCanvasTexture((ctx) => {
+      ctx.clearRect(0, 0, 16, 16);
+      ctx.fillStyle = "rgba(90, 143, 63, 0.95)";
+      ctx.fillRect(5, 7, 6, 7);
+      ctx.fillRect(3, 9, 2, 4);
+      ctx.fillRect(11, 9, 2, 4);
+    }),
+    makeCanvasTexture((ctx) => {
+      ctx.clearRect(0, 0, 16, 16);
+      ctx.fillStyle = "rgba(164, 185, 88, 0.95)";
+      ctx.fillRect(4, 5, 8, 9);
+      ctx.fillRect(2, 7, 2, 5);
+      ctx.fillRect(12, 7, 2, 5);
+    }),
+    makeCanvasTexture((ctx) => {
+      ctx.clearRect(0, 0, 16, 16);
+      ctx.fillStyle = "rgba(210, 176, 88, 0.95)";
+      ctx.fillRect(4, 4, 8, 10);
+      ctx.fillStyle = "rgba(184, 140, 63, 0.95)";
+      ctx.fillRect(5, 7, 6, 5);
+    }),
+  ];
+  textures.bed = makeCanvasTexture((ctx) => {
+    ctx.fillStyle = "#b72e2e";
+    ctx.fillRect(0, 4, 16, 12);
+    ctx.fillStyle = "#f2f2f2";
+    ctx.fillRect(0, 0, 16, 5);
+    ctx.fillStyle = "#8b1f1f";
+    ctx.fillRect(0, 13, 16, 3);
+  });
+  textures.slab = cloneTextureWithTint(textures.oakPlanks, 0xcfae7c);
+  textures.stair = cloneTextureWithTint(textures.cobblestone, 0xb0b0b0);
+  
   // Minecraft biome tint (approx.) for grass/leaves.
   const GRASS_TINT = 0x7ca35a;
   const LEAVES_TINT = 0x5fa84d;
@@ -264,6 +427,58 @@ export const getBlockMaterials = () => {
       makeMat(t.oakPlanks), makeMat(t.craftingTableFront), makeMat(t.craftingTableSide)
     ]],
     torchMaterial: makeMat(t.torch, { transparent: true, alphaTest: 0.1 }),
+    furnaceMaterials: [[
+      makeMat(t.furnaceSide), makeMat(t.furnaceSide), makeMat(t.furnaceTop),
+      makeMat(t.furnaceTop), makeMat(t.furnaceFront), makeMat(t.furnaceSide)
+    ]],
+    chestMaterials: [[
+      makeMat(t.oakPlanks), makeMat(t.oakPlanks), makeMat(t.oakPlanks),
+      makeMat(t.oakPlanks), makeMat(t.oakPlanks), makeMat(t.oakPlanks)
+    ]],
+    doorMaterials: [[
+      makeMat(t.door), makeMat(t.door), makeMat(t.door),
+      makeMat(t.door), makeMat(t.door), makeMat(t.door)
+    ]],
+    ladderMaterials: [[
+      makeMat(t.ladder, { transparent: true, alphaTest: 0.2 }),
+      makeMat(t.ladder, { transparent: true, alphaTest: 0.2 }),
+      makeMat(t.ladder, { transparent: true, alphaTest: 0.2 }),
+      makeMat(t.ladder, { transparent: true, alphaTest: 0.2 }),
+      makeMat(t.ladder, { transparent: true, alphaTest: 0.2 }),
+      makeMat(t.ladder, { transparent: true, alphaTest: 0.2 })
+    ]],
+    farmlandMaterials: [[
+      makeMat(t.dirt), makeMat(t.dirt), makeMat(t.farmlandTop || t.dirt),
+      makeMat(t.dirt), makeMat(t.dirt), makeMat(t.dirt)
+    ]],
+    wheatMaterials: t.wheatStages.map((tex) => ([
+      makeMat(tex, { transparent: true, alphaTest: 0.2 }),
+      makeMat(tex, { transparent: true, alphaTest: 0.2 }),
+      makeMat(tex, { transparent: true, alphaTest: 0.2 }),
+      makeMat(tex, { transparent: true, alphaTest: 0.2 }),
+      makeMat(tex, { transparent: true, alphaTest: 0.2 }),
+      makeMat(tex, { transparent: true, alphaTest: 0.2 })
+    ])),
+    glassMaterials: [[
+      makeMat(t.glass, { transparent: true, opacity: 0.6 }),
+      makeMat(t.glass, { transparent: true, opacity: 0.6 }),
+      makeMat(t.glass, { transparent: true, opacity: 0.6 }),
+      makeMat(t.glass, { transparent: true, opacity: 0.6 }),
+      makeMat(t.glass, { transparent: true, opacity: 0.6 }),
+      makeMat(t.glass, { transparent: true, opacity: 0.6 })
+    ]],
+    slabMaterials: [[
+      makeMat(t.slab || t.oakPlanks), makeMat(t.slab || t.oakPlanks), makeMat(t.slab || t.oakPlanks),
+      makeMat(t.slab || t.oakPlanks), makeMat(t.slab || t.oakPlanks), makeMat(t.slab || t.oakPlanks)
+    ]],
+    stairMaterials: [[
+      makeMat(t.stair || t.cobblestone), makeMat(t.stair || t.cobblestone), makeMat(t.stair || t.cobblestone),
+      makeMat(t.stair || t.cobblestone), makeMat(t.stair || t.cobblestone), makeMat(t.stair || t.cobblestone)
+    ]],
+    bedMaterials: [[
+      makeMat(t.bed), makeMat(t.bed), makeMat(t.bed),
+      makeMat(t.bed), makeMat(t.bed), makeMat(t.bed)
+    ]],
   };
 };
 
@@ -296,6 +511,20 @@ export const blockDefs = {
     customModel: true, // Ne rendereljük a greedy meshing-gel
   },
   19: { name: "Bedrock", solid: true, renderGroup: "opaque", getMaterials: () => getBlockMaterials().bedrockMaterials },
+  20: { name: "Kemence", solid: true, renderGroup: "opaque", getMaterials: () => getBlockMaterials().furnaceMaterials },
+  21: { name: "Láda", solid: true, renderGroup: "opaque", getMaterials: () => getBlockMaterials().chestMaterials },
+  22: { name: "Ajtó", solid: true, renderGroup: "opaque", getMaterials: () => getBlockMaterials().doorMaterials },
+  23: { name: "Ajtó (nyitva)", solid: false, renderGroup: "cutout", getMaterials: () => getBlockMaterials().doorMaterials },
+  24: { name: "Létra", solid: false, renderGroup: "cutout", getMaterials: () => getBlockMaterials().ladderMaterials, climbable: true },
+  25: { name: "Szántóföld", solid: true, renderGroup: "opaque", getMaterials: () => getBlockMaterials().farmlandMaterials },
+  26: { name: "Búza (1)", solid: false, renderGroup: "cutout", getMaterials: () => getBlockMaterials().wheatMaterials[0] },
+  27: { name: "Búza (2)", solid: false, renderGroup: "cutout", getMaterials: () => getBlockMaterials().wheatMaterials[1] },
+  28: { name: "Búza (3)", solid: false, renderGroup: "cutout", getMaterials: () => getBlockMaterials().wheatMaterials[2] },
+  29: { name: "Búza (4)", solid: false, renderGroup: "cutout", getMaterials: () => getBlockMaterials().wheatMaterials[3] },
+  30: { name: "Üveg", solid: true, renderGroup: "cutout", getMaterials: () => getBlockMaterials().glassMaterials },
+  31: { name: "Lap", solid: true, renderGroup: "opaque", getMaterials: () => getBlockMaterials().slabMaterials },
+  32: { name: "Lépcső", solid: true, renderGroup: "opaque", getMaterials: () => getBlockMaterials().stairMaterials },
+  33: { name: "Ágy", solid: true, renderGroup: "opaque", getMaterials: () => getBlockMaterials().bedMaterials },
 };
 
 const textureToIcon = (source) => {
@@ -335,6 +564,20 @@ export const getBlockIcons = () => {
     17: textureToIcon(mats.emeraldOreMaterials[0][0]),
     18: textureToIcon(mats.torchMaterial),
     19: textureToIcon(mats.bedrockMaterials[0][0]),
+    20: textureToIcon(mats.furnaceMaterials[0][2]),
+    21: textureToIcon(mats.chestMaterials[0][0]),
+    22: textureToIcon(mats.doorMaterials[0][0]),
+    23: textureToIcon(mats.doorMaterials[0][0]),
+    24: textureToIcon(mats.ladderMaterials[0][0]),
+    25: textureToIcon(mats.farmlandMaterials[0][2]),
+    26: textureToIcon(mats.wheatMaterials[0][0]),
+    27: textureToIcon(mats.wheatMaterials[1][0]),
+    28: textureToIcon(mats.wheatMaterials[2][0]),
+    29: textureToIcon(mats.wheatMaterials[3][0]),
+    30: textureToIcon(mats.glassMaterials[0][0]),
+    31: textureToIcon(mats.slabMaterials[0][0]),
+    32: textureToIcon(mats.stairMaterials[0][0]),
+    33: textureToIcon(mats.bedMaterials[0][0]),
   };
 };
 

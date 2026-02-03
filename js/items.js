@@ -68,6 +68,58 @@ const makeDropIcon = (base, detail) =>
     ctx.fillRect(4, 6, 6, 4);
   });
 
+const makeIngotIcon = (base, highlight) =>
+  makeIconCanvas((ctx) => {
+    ctx.clearRect(0, 0, 16, 16);
+    ctx.fillStyle = base;
+    ctx.fillRect(3, 6, 10, 5);
+    ctx.fillRect(4, 5, 8, 1);
+    ctx.fillStyle = highlight;
+    ctx.fillRect(4, 6, 6, 2);
+  });
+
+const makeSwordIcon = (blade, handle) =>
+  makeIconCanvas((ctx) => {
+    ctx.clearRect(0, 0, 16, 16);
+    ctx.fillStyle = blade;
+    ctx.fillRect(7, 2, 2, 9);
+    ctx.fillRect(6, 3, 1, 6);
+    ctx.fillStyle = handle;
+    ctx.fillRect(6, 10, 4, 2);
+    ctx.fillRect(7, 12, 2, 3);
+  });
+
+const makeArmorIcon = (color, type) =>
+  makeIconCanvas((ctx) => {
+    ctx.clearRect(0, 0, 16, 16);
+    ctx.fillStyle = color;
+    if (type === "helmet") {
+      ctx.fillRect(4, 3, 8, 4);
+      ctx.clearRect(6, 5, 4, 2);
+    } else if (type === "chest") {
+      ctx.fillRect(4, 4, 8, 6);
+      ctx.fillRect(3, 6, 10, 2);
+    } else if (type === "legs") {
+      ctx.fillRect(4, 5, 8, 6);
+      ctx.clearRect(7, 7, 2, 4);
+    } else if (type === "boots") {
+      ctx.fillRect(4, 9, 4, 3);
+      ctx.fillRect(8, 9, 4, 3);
+    }
+  });
+
+const makeHoeIcon = (head, handle) =>
+  makeIconCanvas((ctx) => {
+    ctx.clearRect(0, 0, 16, 16);
+    ctx.fillStyle = handle;
+    for (let i = 0; i < 5; i += 1) {
+      ctx.fillRect(8 - i, 12 - i, 2, 2);
+    }
+    ctx.fillStyle = head;
+    ctx.fillRect(2, 2, 8, 2);
+    ctx.fillRect(8, 4, 4, 2);
+  });
+
 const toolIcons = {
   wood_pickaxe: makeToolIcon("pickaxe", "#d8b47a", "#8b5a2b").toDataURL(),
   wood_axe: makeToolIcon("axe", "#d8b47a", "#8b5a2b").toDataURL(),
@@ -75,6 +127,19 @@ const toolIcons = {
   stone_pickaxe: makeToolIcon("pickaxe", "#a0a5ad", "#6b7280").toDataURL(),
   stone_axe: makeToolIcon("axe", "#a0a5ad", "#6b7280").toDataURL(),
   stone_shovel: makeToolIcon("shovel", "#a0a5ad", "#6b7280").toDataURL(),
+  iron_pickaxe: makeToolIcon("pickaxe", "#d8dee6", "#6b7280").toDataURL(),
+  iron_axe: makeToolIcon("axe", "#d8dee6", "#6b7280").toDataURL(),
+  iron_shovel: makeToolIcon("shovel", "#d8dee6", "#6b7280").toDataURL(),
+  wood_hoe: makeHoeIcon("#d8b47a", "#8b5a2b").toDataURL(),
+  stone_hoe: makeHoeIcon("#a0a5ad", "#6b7280").toDataURL(),
+  iron_hoe: makeHoeIcon("#d8dee6", "#6b7280").toDataURL(),
+  wood_sword: makeSwordIcon("#d8b47a", "#8b5a2b").toDataURL(),
+  stone_sword: makeSwordIcon("#a0a5ad", "#6b7280").toDataURL(),
+  iron_sword: makeSwordIcon("#d8dee6", "#6b7280").toDataURL(),
+  iron_helmet: makeArmorIcon("#cfd8e3", "helmet").toDataURL(),
+  iron_chestplate: makeArmorIcon("#cfd8e3", "chest").toDataURL(),
+  iron_leggings: makeArmorIcon("#cfd8e3", "legs").toDataURL(),
+  iron_boots: makeArmorIcon("#cfd8e3", "boots").toDataURL(),
 };
 
 const dropIcons = {
@@ -84,6 +149,19 @@ const dropIcons = {
   leather: makeDropIcon("#8b5a2b", "#6f4420").toDataURL(),
   feather: makeDropIcon("#f2f2f2", "#cfcfcf").toDataURL(),
   wool: makeDropIcon("#f5f5f5", "#d9d9d9").toDataURL(),
+  rotten_flesh: makeDropIcon("#a05a52", "#7d3a32").toDataURL(),
+  bone: makeDropIcon("#e0e0e0", "#bdbdbd").toDataURL(),
+  wheat: makeDropIcon("#d2b058", "#b8933f").toDataURL(),
+  seeds: makeDropIcon("#5a8f3f", "#3e6f2b").toDataURL(),
+  bread: makeDropIcon("#d2a15a", "#b47b3a").toDataURL(),
+  beef_cooked: makeDropIcon("#8c3a2b", "#5f2018").toDataURL(),
+  pork_cooked: makeDropIcon("#bf6a6a", "#8b4d4d").toDataURL(),
+  chicken_cooked: makeDropIcon("#d4b38a", "#ad8a5f").toDataURL(),
+};
+
+const ingotIcons = {
+  iron_ingot: makeIngotIcon("#cfd8e3", "#f2f5f9").toDataURL(),
+  gold_ingot: makeIngotIcon("#f2c94c", "#ffe9a6").toDataURL(),
 };
 
 const eggIcons = {
@@ -115,6 +193,16 @@ export const itemDefs = {
   emerald: { name: "Smaragd", blockType: null, icon: blockIcons[17], maxStack: 64 },
   coal_item: { name: "Szén", blockType: null, icon: blockIcons[7], maxStack: 64 },
   torch: { name: "Fáklya", blockType: 18, icon: blockIcons[18], maxStack: 64 },
+  furnace: { name: "Kemence", blockType: 20, icon: blockIcons[20], maxStack: 64 },
+  chest: { name: "Láda", blockType: 21, icon: blockIcons[21], maxStack: 64 },
+  door: { name: "Ajtó", blockType: 22, icon: blockIcons[22], maxStack: 64 },
+  ladder: { name: "Létra", blockType: 24, icon: blockIcons[24], maxStack: 64 },
+  glass: { name: "Üveg", blockType: 30, icon: blockIcons[30], maxStack: 64 },
+  slab: { name: "Lap", blockType: 31, icon: blockIcons[31], maxStack: 64 },
+  stair: { name: "Lépcső", blockType: 32, icon: blockIcons[32], maxStack: 64 },
+  bed: { name: "Ágy", blockType: 33, icon: blockIcons[33], maxStack: 64 },
+  iron_ingot: { name: "Vasrúd", blockType: null, icon: ingotIcons.iron_ingot, maxStack: 64 },
+  gold_ingot: { name: "Aranyrúd", blockType: null, icon: ingotIcons.gold_ingot, maxStack: 64 },
   wood_pickaxe: {
     name: "Fa csákány",
     blockType: null,
@@ -163,12 +251,124 @@ export const itemDefs = {
     durability: 131,
     tool: { type: "shovel", speed: 4, tier: 2 },
   },
+  iron_pickaxe: {
+    name: "Vas csákány",
+    blockType: null,
+    icon: toolIcons.iron_pickaxe,
+    maxStack: 1,
+    durability: 250,
+    tool: { type: "pickaxe", speed: 6, tier: 3 },
+  },
+  iron_axe: {
+    name: "Vas fejsze",
+    blockType: null,
+    icon: toolIcons.iron_axe,
+    maxStack: 1,
+    durability: 250,
+    tool: { type: "axe", speed: 6, tier: 3 },
+  },
+  iron_shovel: {
+    name: "Vas lapát",
+    blockType: null,
+    icon: toolIcons.iron_shovel,
+    maxStack: 1,
+    durability: 250,
+    tool: { type: "shovel", speed: 6, tier: 3 },
+  },
+  wood_hoe: {
+    name: "Fa kapa",
+    blockType: null,
+    icon: toolIcons.wood_hoe,
+    maxStack: 1,
+    durability: 59,
+    tool: { type: "hoe", speed: 1, tier: 1 },
+  },
+  stone_hoe: {
+    name: "Kő kapa",
+    blockType: null,
+    icon: toolIcons.stone_hoe,
+    maxStack: 1,
+    durability: 131,
+    tool: { type: "hoe", speed: 1.5, tier: 2 },
+  },
+  iron_hoe: {
+    name: "Vas kapa",
+    blockType: null,
+    icon: toolIcons.iron_hoe,
+    maxStack: 1,
+    durability: 250,
+    tool: { type: "hoe", speed: 2, tier: 3 },
+  },
+  wood_sword: {
+    name: "Fa kard",
+    blockType: null,
+    icon: toolIcons.wood_sword,
+    maxStack: 1,
+    durability: 59,
+    weapon: { damage: 4 },
+  },
+  stone_sword: {
+    name: "Kő kard",
+    blockType: null,
+    icon: toolIcons.stone_sword,
+    maxStack: 1,
+    durability: 131,
+    weapon: { damage: 5 },
+  },
+  iron_sword: {
+    name: "Vas kard",
+    blockType: null,
+    icon: toolIcons.iron_sword,
+    maxStack: 1,
+    durability: 250,
+    weapon: { damage: 6 },
+  },
+  iron_helmet: {
+    name: "Vas sisak",
+    blockType: null,
+    icon: toolIcons.iron_helmet,
+    maxStack: 1,
+    durability: 165,
+    armor: { slot: "head", defense: 2 },
+  },
+  iron_chestplate: {
+    name: "Vas mellvért",
+    blockType: null,
+    icon: toolIcons.iron_chestplate,
+    maxStack: 1,
+    durability: 240,
+    armor: { slot: "chest", defense: 6 },
+  },
+  iron_leggings: {
+    name: "Vas nadrág",
+    blockType: null,
+    icon: toolIcons.iron_leggings,
+    maxStack: 1,
+    durability: 225,
+    armor: { slot: "legs", defense: 5 },
+  },
+  iron_boots: {
+    name: "Vas csizma",
+    blockType: null,
+    icon: toolIcons.iron_boots,
+    maxStack: 1,
+    durability: 195,
+    armor: { slot: "feet", defense: 2 },
+  },
   beef_raw: { name: "Nyers marhahús", blockType: null, icon: dropIcons.beef_raw, maxStack: 64, food: 3 },
   pork_raw: { name: "Nyers sertéshús", blockType: null, icon: dropIcons.pork_raw, maxStack: 64, food: 3 },
   chicken_raw: { name: "Nyers csirkehús", blockType: null, icon: dropIcons.chicken_raw, maxStack: 64, food: 2 },
+  beef_cooked: { name: "Sült marha", blockType: null, icon: dropIcons.beef_cooked, maxStack: 64, food: 6 },
+  pork_cooked: { name: "Sült sertés", blockType: null, icon: dropIcons.pork_cooked, maxStack: 64, food: 6 },
+  chicken_cooked: { name: "Sült csirke", blockType: null, icon: dropIcons.chicken_cooked, maxStack: 64, food: 5 },
   leather: { name: "Bőr", blockType: null, icon: dropIcons.leather, maxStack: 64 },
   feather: { name: "Toll", blockType: null, icon: dropIcons.feather, maxStack: 64 },
   wool: { name: "Gyapjú", blockType: null, icon: dropIcons.wool, maxStack: 64 },
+  rotten_flesh: { name: "Rothadt hús", blockType: null, icon: dropIcons.rotten_flesh, maxStack: 64, food: 2 },
+  bone: { name: "Csont", blockType: null, icon: dropIcons.bone, maxStack: 64 },
+  wheat: { name: "Búza", blockType: null, icon: dropIcons.wheat, maxStack: 64 },
+  seeds: { name: "Mag", blockType: null, icon: dropIcons.seeds, maxStack: 64 },
+  bread: { name: "Kenyér", blockType: null, icon: dropIcons.bread, maxStack: 64, food: 5 },
   cow_spawn_egg: { name: "Tehén idéző", blockType: null, icon: eggIcons.cow_spawn_egg, maxStack: 64, spawnMob: "cow" },
   pig_spawn_egg: { name: "Malac idéző", blockType: null, icon: eggIcons.pig_spawn_egg, maxStack: 64, spawnMob: "pig" },
   sheep_spawn_egg: { name: "Bárány idéző", blockType: null, icon: eggIcons.sheep_spawn_egg, maxStack: 64, spawnMob: "sheep" },
@@ -201,6 +401,14 @@ export const refreshItemIcons = (icons = blockIcons) => {
   setItemIcon("emerald", icons[17]);
   setItemIcon("coal_item", icons[7]);
   setItemIcon("torch", icons[18]);
+  setItemIcon("furnace", icons[20]);
+  setItemIcon("chest", icons[21]);
+  setItemIcon("door", icons[22]);
+  setItemIcon("ladder", icons[24]);
+  setItemIcon("glass", icons[30]);
+  setItemIcon("slab", icons[31]);
+  setItemIcon("stair", icons[32]);
+  setItemIcon("bed", icons[33]);
   return itemDefs;
 };
 
@@ -219,6 +427,14 @@ export const blockTypeToItem = {
   12: "iron_ore",
   13: "gold_ore",
   18: "torch",
+  20: "furnace",
+  21: "chest",
+  22: "door",
+  24: "ladder",
+  30: "glass",
+  31: "slab",
+  32: "stair",
+  33: "bed",
 };
 
 export const blockHardness = {
@@ -241,6 +457,20 @@ export const blockHardness = {
   17: 3.0,
   18: 0.1,
   19: Infinity,
+  20: 3.5,
+  21: 2.5,
+  22: 3.0,
+  23: 3.0,
+  24: 0.4,
+  25: 0.6,
+  26: 0.2,
+  27: 0.2,
+  28: 0.2,
+  29: 0.2,
+  30: 0.3,
+  31: 2.0,
+  32: 2.0,
+  33: 1.5,
 };
 
 export const blockEffectiveTool = {
@@ -259,6 +489,16 @@ export const blockEffectiveTool = {
   15: "pickaxe",
   16: "pickaxe",
   17: "pickaxe",
+  20: "pickaxe",
+  21: "axe",
+  22: "axe",
+  23: "axe",
+  24: "axe",
+  25: "shovel",
+  30: "pickaxe",
+  31: "pickaxe",
+  32: "pickaxe",
+  33: "axe",
 };
 
 export const blockHarvestTool = {
@@ -271,6 +511,10 @@ export const blockHarvestTool = {
   15: "pickaxe",
   16: "pickaxe",
   17: "pickaxe",
+  20: "pickaxe",
+  30: "pickaxe",
+  31: "pickaxe",
+  32: "pickaxe",
 };
 
 export const blockHarvestLevel = {
@@ -283,6 +527,10 @@ export const blockHarvestLevel = {
   15: 3, // redstone ore -> iron+
   16: 2, // lapis ore -> stone+
   17: 3, // emerald ore -> iron+
+  20: 1,
+  30: 1,
+  31: 1,
+  32: 1,
 };
 
 export const maxStackFor = (id) => itemDefs[id]?.maxStack ?? 64;
@@ -321,6 +569,18 @@ export const getDropForBlock = (blockType, toolId) => {
   if (blockType === 15) return { id: "redstone", count: 4 };
   if (blockType === 16) return { id: "lapis", count: 4 };
   if (blockType === 17) return { id: "emerald", count: 1 };
+  if (blockType === 20) return { id: "furnace", count: 1 };
+  if (blockType === 21) return { id: "chest", count: 1 };
+  if (blockType === 22 || blockType === 23) return { id: "door", count: 1 };
+  if (blockType === 24) return { id: "ladder", count: 1 };
+  if (blockType === 25) return { id: "dirt", count: 1 };
+  if (blockType >= 26 && blockType <= 29) {
+    return { id: "wheat", count: blockType === 29 ? 2 : 1, extra: { seeds: blockType === 29 ? 2 : 1 } };
+  }
+  if (blockType === 30) return { id: "glass", count: 1 };
+  if (blockType === 31) return { id: "slab", count: 1 };
+  if (blockType === 32) return { id: "stair", count: 1 };
+  if (blockType === 33) return { id: "bed", count: 1 };
 
   const itemId = blockTypeToItem[blockType];
   return itemId ? { id: itemId, count: 1 } : null;

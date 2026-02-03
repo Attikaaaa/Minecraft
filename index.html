@@ -18,6 +18,7 @@
         <div class="menu-buttons">
           <button id="menu-resume-btn" class="menu-button">Játék folytatása</button>
           <button id="menu-restart-btn" class="menu-button">Új világ</button>
+          <button id="menu-worlds-btn" class="menu-button">Világok</button>
         </div>
       </div>
       <div id="hud" class="hidden">
@@ -53,6 +54,7 @@
           <button id="pause-resume-btn" class="menu-button">Vissza a játékba</button>
           <button id="pause-mp-btn" class="menu-button">Multiplayer</button>
           <button id="pause-options-btn" class="menu-button">Beállítások...</button>
+          <button id="pause-worlds-btn" class="menu-button">Világok</button>
           <button id="pause-quit-btn" class="menu-button">Mentés és kilépés</button>
         </div>
       </div>
@@ -109,10 +111,32 @@
         <button id="mp-close-btn" class="menu-button">Vissza</button>
       </div>
     </div>
+    <div id="worlds-menu" class="overlay hidden">
+      <div class="panel menu-panel worlds-panel">
+        <h2>Világok</h2>
+        <div id="world-list" class="world-list"></div>
+        <div class="world-create">
+          <div class="option-row">
+            <label for="world-name">Világ neve</label>
+            <input id="world-name" type="text" maxlength="24" placeholder="Új világ" />
+          </div>
+          <div class="option-row">
+            <label for="world-seed">Seed (opcionális)</label>
+            <input id="world-seed" type="text" maxlength="18" placeholder="pl. 12345" />
+          </div>
+          <button id="world-create-btn" class="menu-button">Új világ létrehozása</button>
+        </div>
+        <button id="worlds-back-btn" class="menu-button">Vissza</button>
+      </div>
+    </div>
     <div id="inventory" class="hidden">
       <div class="inventory-panel">
         <div class="inventory-title">Tárgyak</div>
         <div class="inventory-body">
+          <div class="armor-panel">
+            <div class="armor-title">Páncél</div>
+            <div class="armor-grid" id="armor-grid"></div>
+          </div>
           <div class="crafting-panel">
             <div class="craft-grid" id="craft-grid"></div>
             <div class="craft-arrow">→</div>
@@ -128,6 +152,10 @@
       <div class="inventory-panel">
         <div class="inventory-title">Munkapad</div>
         <div class="inventory-body">
+          <div class="armor-panel">
+            <div class="armor-title">Páncél</div>
+            <div class="armor-grid" id="armor-grid-table"></div>
+          </div>
           <div class="crafting-panel">
             <div class="craft-grid craft-grid-large" id="craft-table-grid"></div>
             <div class="craft-arrow">→</div>
@@ -138,6 +166,40 @@
         </div>
       </div>
       <div id="cursor-item-table" class="cursor-item hidden"></div>
+    </div>
+    <div id="furnace" class="hidden">
+      <div class="inventory-panel furnace-panel">
+        <div class="inventory-title">Kemence</div>
+        <div class="inventory-body">
+          <div class="furnace-panel-inner">
+            <div class="furnace-slot-column">
+              <div class="slot" id="furnace-input"></div>
+              <div class="furnace-fire">
+                <div class="furnace-fire-fill" id="furnace-fire-fill"></div>
+              </div>
+              <div class="slot" id="furnace-fuel"></div>
+            </div>
+            <div class="furnace-progress">
+              <div class="furnace-progress-fill" id="furnace-progress-fill"></div>
+            </div>
+            <div class="slot" id="furnace-output"></div>
+          </div>
+          <div class="inventory-grid" id="furnace-inventory"></div>
+          <div class="inventory-hotbar" id="furnace-hotbar"></div>
+        </div>
+      </div>
+      <div id="cursor-item-furnace" class="cursor-item hidden"></div>
+    </div>
+    <div id="chest" class="hidden">
+      <div class="inventory-panel chest-panel">
+        <div class="inventory-title">Láda</div>
+        <div class="inventory-body">
+          <div class="chest-grid" id="chest-grid"></div>
+          <div class="inventory-grid" id="chest-inventory"></div>
+          <div class="inventory-hotbar" id="chest-hotbar"></div>
+        </div>
+      </div>
+      <div id="cursor-item-chest" class="cursor-item hidden"></div>
     </div>
     <div id="death-screen" class="hidden">
       <div class="panel">

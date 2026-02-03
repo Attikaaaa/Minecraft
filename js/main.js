@@ -1,4 +1,4 @@
-import { camera, renderer, scene, THREE } from "./scene.js";
+import { camera, renderer, scene, THREE, getDaylightFactor } from "./scene.js";
 import {
   disablePointerLock,
   CHUNK_SIZE,
@@ -18,6 +18,8 @@ import {
   closeCraftingTable,
   closeInventory,
   craftSlots,
+  getWeaponDamage,
+  applyToolDamage,
   hotbar,
   inventory,
   openCraftingTable,
@@ -52,6 +54,7 @@ import {
   menu,
   menuResumeBtn,
   menuRestartBtn,
+  menuWorldsBtn,
   optionsBackBtn,
   optionsDebugBtn,
   optionsFovEl,
@@ -67,6 +70,7 @@ import {
   pauseMenuEl,
   pauseMultiplayerBtn,
   pauseOptionsBtn,
+  pauseWorldsBtn,
   pauseQuitBtn,
   pauseResumeBtn,
   startBtn,
@@ -82,6 +86,12 @@ import {
   mpCloseBtn,
   mpStatusEl,
   mpLinkEl,
+  worldsMenuEl,
+  worldListEl,
+  worldNameInput,
+  worldSeedInput,
+  worldCreateBtn,
+  worldsBackBtn,
 } from "./dom.js";
 import { lockPointer, unlockPointer } from "./controls.js";
 import {
@@ -92,6 +102,7 @@ import {
   syncMobs,
   updateMobTarget,
   updateMobs,
+  updateHostileSpawns,
 } from "./mobs.js";
 import { itemDefs, refreshItemIcons } from "./items.js";
 import { getMobs } from "./mobs.js";
@@ -132,6 +143,21 @@ import {
   getRemotePlayerMeshes,
 } from "./remote-players.js";
 import { removeTorchOrientation, setTorchOrientation } from "./custom-blocks.js";
+import { blockInfo } from "./blocks.js";
+import { updateFurnaces } from "./furnace.js";
+import { closeFurnace, handleFurnaceMouseMove, openFurnace, updateFurnaceCursor, updateFurnaceUI } from "./furnace-ui.js";
+import { openChest, closeChest, updateChestCursor, updateChestUI } from "./chest-ui.js";
+import { plantCrop, syncCropsFromEdits, updateCrops } from "./farming.js";
+import {
+  applySavePayload,
+  buildSavePayload,
+  loadWorldState,
+  saveWorldState,
+  upsertWorldMeta,
+  listWorlds,
+  deleteWorld,
+  renameWorld,
+} from "./save.js";
 
 const resize = () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -140,6 +166,9 @@ const resize = () => {
 };
 
 window.addEventListener("resize", resize);
+window.addEventListener("beforeunload", () => {
+  saveNow("unload");
+});
 
 const toggleFullscreen = async () => {
   if (!document.fullscreenElement) {
@@ -158,6 +187,10 @@ const MIN_SENSITIVITY = 0.2;
 const MAX_SENSITIVITY = 2;
 const MIN_FOV = 60;
 const MAX_FOV = 110;
+const worldNameParam = urlParams.get("name");
+if (worldNameParam && !state.worldName) {
+  state.worldName = worldNameParam.slice(0, 24);
+}
 
 const formatSensitivity = (value) => `${value.toFixed(2)}x`;
 const formatFov = (value) => `${Math.round(value)}°`;
@@ -456,7 +489,7 @@ const stopMultiplayerConnection = () => {
   updateMultiplayerUI();
 };
 
-const applyBlockUpdates = (updates) => {
+const applyBlockUpdates = (updates, options = {}) => {
   if (!Array.isArray(updates)) return;
   for (const update of updates) {
     if (!update || typeof update.key !== "string") continue;
@@ -477,6 +510,7 @@ const applyBlockUpdates = (updates) => {
       skipBroadcast: true,
       skipWater: !allowSim,
       skipPhysics: !allowSim,
+      skipSave: options.skipSave,
       waterLevel: update.waterLevel ?? null,
       torchOrientation: update.torchOrientation ?? null,
     });
@@ -709,9 +743,113 @@ const closeOptionsMenu = () => {
   pauseMenuEl?.classList.remove("hidden");
 };
 
+const renderWorldList = () => {
+  if (!worldListEl) return;
+  worldListEl.innerHTML = "";
+  const worlds = listWorlds();
+  if (!worlds.length) {
+    const empty = document.createElement("div");
+    empty.className = "world-empty";
+    empty.textContent = "Még nincs mentett világ.";
+    worldListEl.append(empty);
+    return;
+  }
+  const sorted = [...worlds].sort((a, b) => {
+    const aTime = new Date(a.lastPlayed || a.createdAt || 0).getTime();
+    const bTime = new Date(b.lastPlayed || b.createdAt || 0).getTime();
+    return bTime - aTime;
+  });
+  for (const world of sorted) {
+    const row = document.createElement("div");
+    row.className = "world-row";
+    const meta = document.createElement("div");
+    meta.className = "world-meta";
+    const name = world.name || `World ${world.seed}`;
+    const lastPlayed = world.lastPlayed ? new Date(world.lastPlayed).toLocaleString() : "–";
+    meta.innerHTML = `<strong>${name}</strong>Seed: ${world.seed}<br/>Utoljára: ${lastPlayed}`;
+    const actions = document.createElement("div");
+    actions.className = "world-actions";
+    const playBtn = document.createElement("button");
+    playBtn.className = "menu-button";
+    playBtn.textContent = "Játék";
+    playBtn.addEventListener("click", () => {
+      const url = new URL(window.location.href);
+      url.searchParams.set("seed", String(world.seed));
+      if (name) url.searchParams.set("name", name);
+      url.searchParams.delete("room");
+      url.searchParams.delete("test");
+      url.searchParams.delete("bench");
+      window.location.href = url.toString();
+    });
+    const renameBtn = document.createElement("button");
+    renameBtn.className = "menu-button";
+    renameBtn.textContent = "Átnevezés";
+    renameBtn.addEventListener("click", () => {
+      const next = window.prompt("Világ új neve:", name);
+      if (!next) return;
+      renameWorld(world.seed, next.trim());
+      renderWorldList();
+    });
+    const delBtn = document.createElement("button");
+    delBtn.className = "menu-button";
+    delBtn.textContent = "Törlés";
+    delBtn.addEventListener("click", () => {
+      if (!window.confirm(`Biztosan törlöd: ${name}?`)) return;
+      deleteWorld(world.seed);
+      renderWorldList();
+    });
+    actions.append(playBtn, renameBtn, delBtn);
+    row.append(meta, actions);
+    worldListEl.append(row);
+  }
+};
+
+const openWorldMenu = () => {
+  state.worldMenuOpen = true;
+  worldsMenuEl?.classList.remove("hidden");
+  menu?.classList.add("hidden");
+  pauseMenuEl?.classList.add("hidden");
+  optionsMenuEl?.classList.add("hidden");
+  setHudVisible(false);
+  unlockPointer();
+  renderWorldList();
+};
+
+const closeWorldMenu = () => {
+  state.worldMenuOpen = false;
+  worldsMenuEl?.classList.add("hidden");
+  if (state.mode === "paused") {
+    pauseMenuEl?.classList.remove("hidden");
+    setHudVisible(false);
+    return;
+  }
+  if (state.mode === "menu") {
+    menu?.classList.remove("hidden");
+    setHudVisible(false);
+    return;
+  }
+  setHudVisible(true);
+};
+
+const createNewWorld = () => {
+  const name = worldNameInput?.value?.trim() || `World ${Math.floor(Math.random() * 9999)}`;
+  const seedText = worldSeedInput?.value?.trim();
+  const seed = Number.isFinite(Number(seedText)) ? Number(seedText) : Math.floor(Math.random() * 1_000_000_000);
+  upsertWorldMeta({ seed, name });
+  const url = new URL(window.location.href);
+  url.searchParams.set("seed", String(seed));
+  url.searchParams.set("name", name.slice(0, 24));
+  url.searchParams.delete("room");
+  url.searchParams.delete("test");
+  url.searchParams.delete("bench");
+  window.location.href = url.toString();
+};
+
 const openMainMenu = () => {
   state.mode = "menu";
   state.optionsOpen = false;
+  state.worldMenuOpen = false;
+  worldsMenuEl?.classList.add("hidden");
   pauseMenuEl?.classList.add("hidden");
   optionsMenuEl?.classList.add("hidden");
   menu?.classList.remove("hidden");
@@ -747,6 +885,20 @@ const BENCH_BLOCK_TYPE = 11;
 const testMode = urlParams.get("test") === "1";
 const showBlocksMode = testMode && urlParams.has("showblocks");
 const waterDemoMode = testMode && urlParams.has("waterdemo");
+const SAVE_INTERVAL_MS = 20000;
+let lastAutoSaveMs = 0;
+
+const canSaveWorld = () => state.worldInitialized && !state.multiplayer.enabled && !testMode;
+
+const saveNow = (reason = "manual") => {
+  if (!canSaveWorld()) return false;
+  const payload = buildSavePayload();
+  if (payload) {
+    payload.reason = reason;
+  }
+  saveWorldState(payload);
+  return true;
+};
 
 if (testMode && typeof window !== "undefined") {
   window.__RAF_TICKS = 0;
@@ -786,6 +938,8 @@ const setupShowBlocksPreview = () => {
   const blockIds = [
     1, 2, 3, 4, 5, 6, 7, 8, 9,
     10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+    20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+    30, 31, 32, 33,
   ];
   const baseY = Math.max(spawn.height, SEA_LEVEL);
   const startX = Math.round(spawn.x) - Math.floor(blockIds.length / 2);
@@ -795,6 +949,7 @@ const setupShowBlocksPreview = () => {
       skipBroadcast: true,
       skipWater: true,
       skipPhysics: true,
+      skipSave: true,
       torchOrientation: "floor",
     });
   });
@@ -805,8 +960,8 @@ const setupShowBlocksPreview = () => {
 
 const setupWaterTestPreview = () => {
   if (!waterDemoMode) return;
-  const radius = 20;
-  const baseY = Math.max(spawn.height, SEA_LEVEL);
+  const radius = 32;
+  const baseY = SEA_LEVEL;
   const centerX = Math.round(spawn.x);
   const centerZ = Math.round(spawn.z);
   const startX = centerX - radius;
@@ -815,25 +970,27 @@ const setupWaterTestPreview = () => {
   const endZ = centerZ + radius;
   for (let x = startX; x <= endX; x += 1) {
     for (let z = startZ; z <= endZ; z += 1) {
-      setBlock(x, baseY, z, 8, {
+      for (let y = 0; y < WORLD_MAX_HEIGHT; y += 1) {
+      setBlock(x, y, z, 0, {
         skipBroadcast: true,
         skipWater: true,
         skipPhysics: true,
-        waterLevel: 0,
+        skipSave: true,
       });
-      for (let y = baseY + 1; y <= baseY + 4; y += 1) {
-        setBlock(x, y, z, 0, {
-          skipBroadcast: true,
-          skipWater: true,
-          skipPhysics: true,
-        });
-      }
     }
+    setBlock(x, baseY, z, 8, {
+      skipBroadcast: true,
+      skipWater: true,
+      skipPhysics: true,
+      skipSave: true,
+      waterLevel: 0,
+    });
+  }
   }
   const cameraPos = {
     x: centerX + 0.5,
-    y: baseY + 12,
-    z: centerZ - radius - 6,
+    y: baseY + 20,
+    z: centerZ - Math.floor(radius / 2),
   };
   teleportPlayer(cameraPos.x, cameraPos.y, cameraPos.z);
   const dx = centerX + 0.5 - cameraPos.x;
@@ -1108,7 +1265,12 @@ pauseOptionsBtn?.addEventListener("click", () => {
   openOptionsMenu();
 });
 
+pauseWorldsBtn?.addEventListener("click", () => {
+  openWorldMenu();
+});
+
 pauseQuitBtn?.addEventListener("click", () => {
+  saveNow("quit");
   openMainMenu();
 });
 
@@ -1117,7 +1279,19 @@ menuResumeBtn?.addEventListener("click", () => {
 });
 
 menuRestartBtn?.addEventListener("click", () => {
-  window.location.reload();
+  createNewWorld();
+});
+
+menuWorldsBtn?.addEventListener("click", () => {
+  openWorldMenu();
+});
+
+worldCreateBtn?.addEventListener("click", () => {
+  createNewWorld();
+});
+
+worldsBackBtn?.addEventListener("click", () => {
+  closeWorldMenu();
 });
 
 document.addEventListener("fullscreenchange", () => {
@@ -1292,6 +1466,21 @@ const startGame = async () => {
   setupShowBlocksPreview();
   setupWaterTestPreview();
   initTime();
+  let loadedSave = null;
+  if (!state.multiplayer.enabled && !testMode) {
+    loadedSave = loadWorldState(randomSeed);
+    if (loadedSave) {
+      if (Array.isArray(loadedSave.blocks)) {
+        applyBlockUpdates(loadedSave.blocks, { skipSave: true });
+        syncCropsFromEdits(loadedSave.blocks);
+      }
+      applySavePayload(loadedSave);
+      camera.rotation.set(player.pitch, player.yaw, 0, "YXZ");
+      updateSurvivalUI();
+    } else {
+      upsertWorldMeta({ seed: randomSeed, name: state.worldName ?? null });
+    }
+  }
   state.mode = "playing";
   state.optionsOpen = false;
   if (menu) menu.classList.add("hidden");
@@ -1299,7 +1488,7 @@ const startGame = async () => {
   lockPointer();
   updateAllSlotsUI();
   if (!state.multiplayer.enabled || state.multiplayer.isHost) {
-    spawnInitialMobs(player.position);
+    if (!loadedSave) spawnInitialMobs(player.position);
   }
   if (pendingSnapshot) {
     applySnapshot(pendingSnapshot);
@@ -1328,6 +1517,24 @@ canvas?.addEventListener("click", () => {
 window.addEventListener("keydown", (event) => {
   if (isChatOpen()) {
     if (event.code === "Escape") closeChat();
+    return;
+  }
+  if (state.worldMenuOpen) {
+    if (event.code === "Escape") {
+      closeWorldMenu();
+    }
+    return;
+  }
+  if (state.furnaceOpen) {
+    if (event.code === "Escape" || event.code === "KeyE" || event.code === "KeyI") {
+      closeFurnace();
+    }
+    return;
+  }
+  if (state.chestOpen) {
+    if (event.code === "Escape" || event.code === "KeyE" || event.code === "KeyI") {
+      closeChest();
+    }
     return;
   }
 
@@ -1437,7 +1644,7 @@ window.addEventListener("keyup", (event) => {
 window.addEventListener("wheel", (event) => {
   if (isChatOpen()) return;
   if (state.mode !== "playing") return;
-  if (state.inventoryOpen || state.craftingTableOpen) return;
+  if (state.inventoryOpen || state.craftingTableOpen || state.furnaceOpen || state.chestOpen) return;
   if (event.deltaY > 0) {
     state.selectedHotbar = (state.selectedHotbar + 1) % hotbar.length;
   } else {
@@ -1448,6 +1655,15 @@ window.addEventListener("wheel", (event) => {
 
 window.addEventListener("mousemove", (event) => {
   if (isChatOpen()) return;
+  if (state.furnaceOpen) {
+    handleFurnaceMouseMove(event);
+    updateFurnaceCursor();
+    return;
+  }
+  if (state.chestOpen) {
+    updateChestCursor(event);
+    return;
+  }
   if (state.inventoryOpen || state.craftingTableOpen) return;
   if (!pointerActive() || state.mode !== "playing") return;
   const sensitivity = 0.002 * state.mouseSensitivity;
@@ -1460,43 +1676,100 @@ window.addEventListener("contextmenu", (event) => event.preventDefault());
 
 window.addEventListener("mousedown", (event) => {
   if (isChatOpen()) return;
-  if (state.inventoryOpen || state.craftingTableOpen) return;
+  if (state.inventoryOpen || state.craftingTableOpen || state.furnaceOpen || state.chestOpen) return;
   if (state.mode !== "playing" || !pointerActive()) return;
   if (state.gamemode === "spectator") return;
   if (event.button === 0) {
     if (state.targetedPlayer) {
       if (network.connected && state.targetedPlayer.id) {
+        const damage = getWeaponDamage();
         if (network.isHost) {
           if (state.targetedPlayer.id === network.clientId) {
-            takeDamage(2);
+            takeDamage(damage);
           } else {
-            sendPlayerDamage(state.targetedPlayer.id, 2);
+            sendPlayerDamage(state.targetedPlayer.id, damage);
           }
         } else {
-          sendAction({ kind: "attack_player", targetId: state.targetedPlayer.id, amount: 2 });
+          sendAction({ kind: "attack_player", targetId: state.targetedPlayer.id, amount: damage });
         }
+        applyToolDamage();
       }
       return;
     }
     if (state.targetedMob) {
+      const damage = getWeaponDamage();
       if (network.connected && !network.isHost) {
-        sendAction({ kind: "attack_mob", mobId: state.targetedMob.id, damage: 2 });
+        sendAction({ kind: "attack_mob", mobId: state.targetedMob.id, damage });
       } else {
-        attackMob(state.targetedMob);
+        attackMob(state.targetedMob, damage);
       }
+      applyToolDamage();
       return;
     }
     input.mining = true;
   }
   if (event.button === 2) {
+    const selected = hotbar[state.selectedHotbar];
     if (state.targetedBlock) {
       const blockType = getBlock(state.targetedBlock.x, state.targetedBlock.y, state.targetedBlock.z);
       if (blockType === 9) {
         openCraftingTable();
         return;
       }
+      if (blockType === 20) {
+        openFurnace(state.targetedBlock.x, state.targetedBlock.y, state.targetedBlock.z);
+        return;
+      }
+      if (blockType === 21) {
+        openChest(state.targetedBlock.x, state.targetedBlock.y, state.targetedBlock.z);
+        return;
+      }
+      if (blockType === 22 || blockType === 23) {
+        const nextType = blockType === 22 ? 23 : 22;
+        setBlock(state.targetedBlock.x, state.targetedBlock.y, state.targetedBlock.z, nextType);
+        return;
+      }
+      if (blockType === 33) {
+        state.respawnPoint = {
+          x: state.targetedBlock.x + 0.5,
+          y: state.targetedBlock.y + 1,
+          z: state.targetedBlock.z + 0.5,
+        };
+        if (getDaylightFactor() < 0.4) {
+          setTimeOfDay(0.25);
+          player.health = Math.min(20, player.health + 4);
+          updateSurvivalUI();
+        }
+        return;
+      }
     }
-    const selected = hotbar[state.selectedHotbar];
+    if (selected?.id && selected.id.endsWith("_hoe") && state.targetedBlock) {
+      const target = state.targetedBlock;
+      const blockType = getBlock(target.x, target.y, target.z);
+      const above = getBlock(target.x, target.y + 1, target.z);
+      if ((blockType === 1 || blockType === 2) && above === 0) {
+        setBlock(target.x, target.y, target.z, 25);
+        if (state.gamemode !== "creative") {
+          applyToolDamage();
+          updateAllSlotsUI();
+        }
+        return;
+      }
+    }
+    if (selected?.id === "seeds" && state.targetedBlock) {
+      const target = state.targetedBlock;
+      const blockType = getBlock(target.x, target.y, target.z);
+      const above = getBlock(target.x, target.y + 1, target.z);
+      if (blockType === 25 && above === 0) {
+        plantCrop(target.x, target.y + 1, target.z);
+        if (state.gamemode !== "creative") {
+          selected.count -= 1;
+          if (selected.count <= 0) setSlot(selected, null, 0);
+          updateAllSlotsUI();
+        }
+        return;
+      }
+    }
     const spawnType = selected?.id ? itemDefs[selected.id]?.spawnMob : null;
     if (spawnType) {
       const baseX = state.targetedBlock ? state.targetedBlock.x + 0.5 : player.position.x + Math.sin(player.yaw) * 1.5;
@@ -1570,6 +1843,9 @@ const tick = (time) => {
       if (isHostSim) {
         updateMobs(dt);
         updateFallingBlocks(dt); // Minecraft fizika: falling blocks
+        updateFurnaces(dt);
+        updateCrops(dt);
+        updateHostileSpawns(dt, player.position);
       }
       updateItemEntities(dt, now, player, state.gamemode !== "spectator", {
         simulatePhysics: isHostSim,
@@ -1582,6 +1858,13 @@ const tick = (time) => {
       });
       updateRemotePlayers(dt);
       sendNetworkUpdates(now);
+      if (state.furnaceOpen) {
+        updateFurnaceUI();
+        updateFurnaceCursor();
+      }
+      if (state.chestOpen) {
+        updateChestUI();
+      }
     }
     const worldMs = performance.now() - worldStart;
     const uiStart = performance.now();
@@ -1593,6 +1876,10 @@ const tick = (time) => {
     setPerfTimings({ renderMs, worldMs, uiMs });
     recordFrameTime(rawDt);
     updatePerfOverlay();
+    if (canSaveWorld() && time - lastAutoSaveMs >= SAVE_INTERVAL_MS) {
+      lastAutoSaveMs = time;
+      saveNow("autosave");
+    }
   } else {
     const renderStart = performance.now();
     render();
@@ -1610,6 +1897,9 @@ window.render_game_to_text = () => {
     gamemode: state.gamemode,
     pauseMenuOpen: state.mode === "paused",
     optionsMenuOpen: state.mode === "paused" && state.optionsOpen,
+    worldMenuOpen: Boolean(state.worldMenuOpen),
+    furnaceOpen: Boolean(state.furnaceOpen),
+    chestOpen: Boolean(state.chestOpen),
     menuOpen: state.mode === "menu",
     settings: {
       sensitivity: Number(state.mouseSensitivity.toFixed(2)),

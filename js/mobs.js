@@ -1,8 +1,12 @@
-import { THREE, scene } from "./scene.js";
+import { THREE, scene, getDaylightFactor } from "./scene.js";
 import { clamp, randomSeed, WORLD_MAX_HEIGHT } from "./config.js";
 import { isSolid, getBlock } from "./world.js";
 import { spawnItemDrop } from "./entities.js";
 import { raycastVoxel } from "./raycast.js";
+import { player, takeDamage } from "./player.js";
+import { network, sendPlayerDamage } from "./network.js";
+import { getRemotePlayers } from "./remote-players.js";
+import { state } from "./state.js";
 
 const mobRaycaster = new THREE.Raycaster();
 mobRaycaster.far = 3.5;
@@ -57,6 +61,32 @@ const mobDefs = {
     ],
     colors: { body: 0xf6f6f6, spot: 0xe0e0e0 },
   },
+  zombie: {
+    name: "Zombi",
+    radius: 0.4,
+    height: 1.7,
+    speed: 0.09,
+    health: 14,
+    hostile: true,
+    attackDamage: 3,
+    attackRange: 1.4,
+    aggroRange: 10,
+    drops: [{ id: "rotten_flesh", min: 0, max: 2 }],
+    colors: { body: 0x4b8b4b, spot: 0x2f5f2f },
+  },
+  skeleton: {
+    name: "Csontváz",
+    radius: 0.4,
+    height: 1.7,
+    speed: 0.1,
+    health: 12,
+    hostile: true,
+    attackDamage: 2,
+    attackRange: 1.6,
+    aggroRange: 11,
+    drops: [{ id: "bone", min: 0, max: 2 }],
+    colors: { body: 0xe6e6e6, spot: 0xbdbdbd },
+  },
 };
 
 const mobs = [];
@@ -69,6 +99,33 @@ const tempPos = new THREE.Vector3();
 const groundTestPos = new THREE.Vector3();
 const moveInput = new THREE.Vector3();
 const forwardDir = new THREE.Vector3();
+
+const findHostileTarget = (mob) => {
+  const targets = [];
+  if (state.gamemode !== "spectator") {
+    targets.push({ type: "local", id: null, x: player.position.x, y: player.position.y, z: player.position.z });
+  }
+  if (network.connected && network.isHost) {
+    const remotes = getRemotePlayers();
+    for (const rp of remotes) {
+      if (!rp) continue;
+      targets.push({ type: "remote", id: rp.id, x: rp.x, y: rp.y, z: rp.z });
+    }
+  }
+  let best = null;
+  let bestDist = Infinity;
+  for (const t of targets) {
+    const dx = t.x - mob.position.x;
+    const dy = t.y - mob.position.y;
+    const dz = t.z - mob.position.z;
+    const dist = Math.hypot(dx, dy, dz);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = { ...t, dist };
+    }
+  }
+  return best;
+};
 
 const collidesAt = (pos, radius, height) => {
   const minX = pos.x - radius;
@@ -166,6 +223,7 @@ export const spawnMob = (type, position, idOverride = null) => {
     moving: false,
     health: def.health,
     hurtTimer: 0,
+    attackCooldown: 0,
     radius: def.radius,
     height: def.height,
     mesh: buildMobMesh(def),
@@ -248,6 +306,7 @@ export const updateMobs = (dt) => {
 
   for (const mob of mobs) {
     if (mob.hurtTimer > 0) mob.hurtTimer = Math.max(0, mob.hurtTimer - dt);
+    if (mob.attackCooldown > 0) mob.attackCooldown = Math.max(0, mob.attackCooldown - dt);
 
     mob.wanderTimer -= dt;
     if (mob.wanderTimer <= 0) {
@@ -263,6 +322,24 @@ export const updateMobs = (dt) => {
       : mob.def.speed * 0.2;
 
     moveInput.set(0, 0, 0);
+    if (mob.def.hostile) {
+      const target = findHostileTarget(mob);
+      if (target && target.dist <= (mob.def.aggroRange ?? 8)) {
+        const angle = Math.atan2(target.x - mob.position.x, target.z - mob.position.z);
+        mob.wanderYaw = angle;
+        mob.moving = true;
+        if (target.dist <= (mob.def.attackRange ?? 1.5) && mob.attackCooldown <= 0) {
+          mob.attackCooldown = 1.0;
+          if (target.type === "local") {
+            if (state.gamemode !== "creative" && state.gamemode !== "spectator") {
+              takeDamage(mob.def.attackDamage ?? 2);
+            }
+          } else if (target.type === "remote") {
+            sendPlayerDamage(target.id, mob.def.attackDamage ?? 2);
+          }
+        }
+      }
+    }
     if (mob.moving) {
       forwardDir.set(Math.sin(mob.wanderYaw), 0, Math.cos(mob.wanderYaw));
       moveInput.add(forwardDir);
@@ -351,7 +428,7 @@ const findGround = (x, z) => {
 export const spawnInitialMobs = (center) => {
   if (initialMobsSpawned) return;
   initialMobsSpawned = true;
-  const types = Object.keys(mobDefs);
+  const types = Object.keys(mobDefs).filter((type) => !mobDefs[type].hostile);
   for (const type of types) {
     for (let i = 0; i < 2; i += 1) {
       const ox = Math.floor((Math.random() - 0.5) * 10);
@@ -364,6 +441,37 @@ export const spawnInitialMobs = (center) => {
       if (!collidesAt(pos, mobDefs[type].radius, mobDefs[type].height)) {
         spawnMob(type, pos);
       }
+    }
+  }
+};
+
+let hostileSpawnTimer = 0;
+const HOSTILE_SPAWN_INTERVAL = 8;
+const HOSTILE_SPAWN_MAX = 6;
+
+export const updateHostileSpawns = (dt, center) => {
+  if (!center) return;
+  if (getDaylightFactor() > 0.4) return;
+  hostileSpawnTimer += dt;
+  if (hostileSpawnTimer < HOSTILE_SPAWN_INTERVAL) return;
+  hostileSpawnTimer = 0;
+  const currentHostiles = mobs.filter((mob) => mob.def.hostile).length;
+  if (currentHostiles >= HOSTILE_SPAWN_MAX) return;
+  const hostileTypes = Object.keys(mobDefs).filter((key) => mobDefs[key].hostile);
+  if (hostileTypes.length === 0) return;
+  const type = hostileTypes[Math.floor(Math.random() * hostileTypes.length)];
+  const attempts = 8;
+  for (let i = 0; i < attempts; i += 1) {
+    const ox = Math.floor((Math.random() - 0.5) * 18);
+    const oz = Math.floor((Math.random() - 0.5) * 18);
+    const x = Math.floor(center.x + ox);
+    const z = Math.floor(center.z + oz);
+    const ground = findGround(x, z);
+    if (ground == null) continue;
+    const pos = new THREE.Vector3(x + 0.5, ground + 1, z + 0.5);
+    if (!collidesAt(pos, mobDefs[type].radius, mobDefs[type].height)) {
+      spawnMob(type, pos);
+      return;
     }
   }
 };

@@ -122,9 +122,9 @@ export const updateDayNight = (timeOfDay) => {
   scene.background.copy(tempSky);
   scene.fog.color.copy(tempSky);
 
-  ambient.intensity = 0.14 + eased * 0.5;
-  hemi.intensity = 0.2 + eased * 0.5;
-  sun.intensity = 0.05 + eased * 0.95;
+  ambient.intensity = 0.05 + eased * 0.6;
+  hemi.intensity = 0.08 + eased * 0.6;
+  sun.intensity = 0.02 + eased * 1.05;
   sun.position.set(Math.cos(angle) * 30, 15 + sunHeight * 30, Math.sin(angle) * 30);
 };
 

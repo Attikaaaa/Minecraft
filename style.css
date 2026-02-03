@@ -73,6 +73,11 @@ button:hover {
   margin: 0;
 }
 
+.worlds-panel {
+  max-width: 620px;
+  width: min(620px, 92vw);
+}
+
 .menu-buttons {
   display: flex;
   flex-direction: column;
@@ -121,6 +126,61 @@ button:hover {
   color: #fff;
   padding: 6px 8px;
   font-size: 12px;
+}
+
+.world-list {
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(10, 10, 10, 0.6);
+  padding: 8px;
+  margin: 10px 0 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.world-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  background: rgba(26, 26, 26, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.world-meta {
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.world-meta strong {
+  display: block;
+  font-size: 13px;
+}
+
+.world-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.world-actions .menu-button {
+  width: auto;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.world-empty {
+  text-align: center;
+  font-size: 12px;
+  opacity: 0.75;
+  padding: 8px;
+}
+
+.world-create {
+  margin-bottom: 12px;
 }
 
 .option-value {
@@ -426,7 +486,9 @@ button:hover {
 }
 
 #inventory,
-#crafting-table {
+#crafting-table,
+#furnace,
+#chest {
   position: absolute;
   inset: 0;
   background: rgba(0, 0, 0, 0.65);
@@ -446,6 +508,68 @@ button:hover {
   box-shadow: none;
 }
 
+.furnace-panel {
+  min-width: 480px;
+}
+
+.chest-panel {
+  min-width: 520px;
+}
+
+.chest-grid {
+  display: grid;
+  grid-template-columns: repeat(9, 40px);
+  gap: 4px;
+}
+
+.furnace-panel-inner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+
+.furnace-slot-column {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+}
+
+.furnace-fire {
+  width: 22px;
+  height: 26px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.4);
+  position: relative;
+}
+
+.furnace-fire-fill {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 0%;
+  background: linear-gradient(180deg, #f2c04b, #d95a3c);
+}
+
+.furnace-progress {
+  width: 80px;
+  height: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.4);
+  position: relative;
+}
+
+.furnace-progress-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #f6e58d, #f0932b);
+}
+
 .inventory-title {
   font-weight: 600;
   margin-bottom: 12px;
@@ -458,6 +582,24 @@ button:hover {
   flex-direction: column;
   gap: 12px;
   align-items: center;
+}
+
+.armor-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.armor-title {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.armor-grid {
+  display: grid;
+  grid-template-rows: repeat(4, 40px);
+  gap: 4px;
 }
 
 .inventory-grid,

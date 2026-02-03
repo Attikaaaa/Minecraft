@@ -22,6 +22,7 @@ import { network, sendBlockUpdates } from "./network.js";
 
 export const chunks = new Map();
 const testMode = urlParams.get("test") === "1";
+const worldEdits = new Map();
 
 export const keyFor = (x, y, z) => `${x},${y},${z}`;
 const chunkKey = (cx, cz) => `${cx},${cz}`;
@@ -147,6 +148,16 @@ const setBlockInChunk = (chunk, lx, y, lz, type, waterLevel = null) => {
   if (prev === 0 && type !== 0) state.blocks += 1;
   if (prev !== 0 && type === 0) state.blocks = Math.max(0, state.blocks - 1);
   return prev;
+};
+
+const recordWorldEdit = (x, y, z, type, options = {}) => {
+  if (options.skipSave) return;
+  if (testMode) return;
+  if (state.multiplayer.enabled) return;
+  const key = keyFor(x, y, z);
+  const waterLevel = type === 8 ? (options.waterLevel ?? getWaterLevel(x, y, z)) : null;
+  const torchOrientation = type === 18 ? (options.torchOrientation ?? getTorchOrientation(x, y, z)) : null;
+  worldEdits.set(key, { key, type, waterLevel, torchOrientation });
 };
 
 const markChunkDirty = (chunk) => {
@@ -807,6 +818,8 @@ export const setBlock = (x, y, z, type, options = {}) => {
     checkNeighborFalling(x, y, z);
   }
 
+  recordWorldEdit(x, y, z, type, options);
+
   if (!options.skipBroadcast && !options.remote && network.connected) {
     const isWaterUpdate = options.source === "water";
     const isPhysicsUpdate = options.source === "physics";
@@ -833,7 +846,7 @@ const clearSpawnArea = () => {
     for (let z = spawn.z - 1; z <= spawn.z + 1; z += 1) {
       for (let y = spawn.height; y <= spawn.height + 4; y += 1) {
         if (isWithinWorld(x, y, z)) {
-          setBlock(x, y, z, 0);
+          setBlock(x, y, z, 0, { skipSave: true });
         }
       }
     }
@@ -880,6 +893,26 @@ export const getWorldStats = () => {
     meshQueue: queueSize(meshQueue),
     waterQueue: waterSystem ? waterSystem.getQueueSize() : 0,
   };
+};
+
+export const getWorldEditsSnapshot = () => Array.from(worldEdits.values());
+
+export const setWorldEditsSnapshot = (entries) => {
+  worldEdits.clear();
+  if (!Array.isArray(entries)) return;
+  for (const entry of entries) {
+    if (!entry || typeof entry.key !== "string") continue;
+    worldEdits.set(entry.key, {
+      key: entry.key,
+      type: Number(entry.type) || 0,
+      waterLevel: entry.waterLevel ?? null,
+      torchOrientation: entry.torchOrientation ?? null,
+    });
+  }
+};
+
+export const clearWorldEdits = () => {
+  worldEdits.clear();
 };
 
 export const getWorldTimings = () => ({ ...worldTimings });

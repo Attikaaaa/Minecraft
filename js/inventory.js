@@ -6,6 +6,12 @@ import {
   craftTableHotbarEl,
   craftTableInventoryEl,
   craftTableOutputEl,
+  armorGridEl,
+  armorGridTableEl,
+  furnaceInventoryEl,
+  furnaceHotbarEl,
+  chestInventoryEl,
+  chestHotbarEl,
   cursorItemEl,
   cursorItemTableEl,
   craftingTableEl,
@@ -26,6 +32,7 @@ const slotUIs = {
   inventory: [],
   craft: [],
   craftTable: [],
+  armor: [],
 };
 
 const createSlotElement = (group, index) => {
@@ -66,6 +73,7 @@ export const hotbar = Array.from({ length: HOTBAR_SIZE }, () => createSlot());
 export const inventory = Array.from({ length: INVENTORY_ROWS * INVENTORY_COLS }, () => createSlot());
 export const craftSlots = Array.from({ length: CRAFT_SIZE }, () => createSlot());
 export const tableCraftSlots = Array.from({ length: TABLE_CRAFT_SIZE }, () => createSlot());
+export const armorSlots = Array.from({ length: 4 }, () => createSlot());
 
 export const seedStartingItems = () => {
   hotbar[0] = createSlot("grass", 64);
@@ -83,6 +91,7 @@ export const seedStartingItems = () => {
   inventory[3] = createSlot("sheep_spawn_egg", 4);
   inventory[4] = createSlot("chicken_spawn_egg", 4);
   inventory[5] = createSlot("torch", 16);
+  inventory[6] = createSlot("seeds", 6);
 };
 
 seedStartingItems();
@@ -90,10 +99,16 @@ seedStartingItems();
 buildSlots(hotbarEl, "hotbar", HOTBAR_SIZE);
 buildSlots(inventoryGridEl, "inventory", inventory.length);
 buildSlots(inventoryHotbarEl, "hotbar", HOTBAR_SIZE);
+if (furnaceInventoryEl) buildSlots(furnaceInventoryEl, "inventory", inventory.length);
+if (furnaceHotbarEl) buildSlots(furnaceHotbarEl, "hotbar", HOTBAR_SIZE);
+if (chestInventoryEl) buildSlots(chestInventoryEl, "inventory", inventory.length);
+if (chestHotbarEl) buildSlots(chestHotbarEl, "hotbar", HOTBAR_SIZE);
+if (armorGridEl) buildSlots(armorGridEl, "armor", armorSlots.length);
 buildSlots(craftGridEl, "craft", craftSlots.length);
 buildSlots(craftTableGridEl, "craftTable", TABLE_CRAFT_SIZE);
 buildSlots(craftTableInventoryEl, "inventory", inventory.length);
 buildSlots(craftTableHotbarEl, "hotbar", HOTBAR_SIZE);
+if (armorGridTableEl) buildSlots(armorGridTableEl, "armor", armorSlots.length);
 
 const craftOutputUI = (() => {
   const ui = createSlotElement("craftOutput", 0);
@@ -394,6 +409,182 @@ const recipes = [
     output: { id: "stone_shovel", count: 1 },
     size: [3],
   },
+  {
+    id: "furnace",
+    type: "shaped",
+    pattern: ["CCC", "C C", "CCC"],
+    key: { C: "cobble" },
+    output: { id: "furnace", count: 1 },
+    size: [3],
+  },
+  {
+    id: "chest",
+    type: "shaped",
+    pattern: ["PPP", "P P", "PPP"],
+    key: { P: "plank" },
+    output: { id: "chest", count: 1 },
+    size: [3],
+  },
+  {
+    id: "door",
+    type: "shaped",
+    pattern: ["PP", "PP", "PP"],
+    key: { P: "plank" },
+    output: { id: "door", count: 1 },
+    size: [3],
+  },
+  {
+    id: "ladder",
+    type: "shaped",
+    pattern: ["S S", "SSS", "S S"],
+    key: { S: "stick" },
+    output: { id: "ladder", count: 3 },
+    size: [3],
+  },
+  {
+    id: "slab",
+    type: "shaped",
+    pattern: ["PPP"],
+    key: { P: "plank" },
+    output: { id: "slab", count: 6 },
+    size: [3],
+  },
+  {
+    id: "stair",
+    type: "shaped",
+    pattern: ["P  ", "PP ", "PPP"],
+    key: { P: "plank" },
+    output: { id: "stair", count: 4 },
+    size: [3],
+  },
+  {
+    id: "bed",
+    type: "shaped",
+    pattern: ["WWW", "PPP"],
+    key: { W: "wool", P: "plank" },
+    output: { id: "bed", count: 1 },
+    size: [3],
+  },
+  {
+    id: "wood_sword",
+    type: "shaped",
+    pattern: [" P ", " P ", " S "],
+    key: { P: "plank", S: "stick" },
+    output: { id: "wood_sword", count: 1 },
+    size: [3],
+  },
+  {
+    id: "stone_sword",
+    type: "shaped",
+    pattern: [" C ", " C ", " S "],
+    key: { C: "cobble", S: "stick" },
+    output: { id: "stone_sword", count: 1 },
+    size: [3],
+  },
+  {
+    id: "iron_sword",
+    type: "shaped",
+    pattern: [" I ", " I ", " S "],
+    key: { I: "iron_ingot", S: "stick" },
+    output: { id: "iron_sword", count: 1 },
+    size: [3],
+  },
+  {
+    id: "wood_hoe",
+    type: "shaped",
+    pattern: ["PP ", " S ", " S "],
+    key: { P: "plank", S: "stick" },
+    output: { id: "wood_hoe", count: 1 },
+    size: [3],
+  },
+  {
+    id: "stone_hoe",
+    type: "shaped",
+    pattern: ["CC ", " S ", " S "],
+    key: { C: "cobble", S: "stick" },
+    output: { id: "stone_hoe", count: 1 },
+    size: [3],
+  },
+  {
+    id: "iron_hoe",
+    type: "shaped",
+    pattern: ["II ", " S ", " S "],
+    key: { I: "iron_ingot", S: "stick" },
+    output: { id: "iron_hoe", count: 1 },
+    size: [3],
+  },
+  {
+    id: "iron_pickaxe",
+    type: "shaped",
+    pattern: ["III", " S ", " S "],
+    key: { I: "iron_ingot", S: "stick" },
+    output: { id: "iron_pickaxe", count: 1 },
+    size: [3],
+  },
+  {
+    id: "iron_axe_left",
+    type: "shaped",
+    pattern: ["II ", "IS ", " S "],
+    key: { I: "iron_ingot", S: "stick" },
+    output: { id: "iron_axe", count: 1 },
+    size: [3],
+  },
+  {
+    id: "iron_axe_right",
+    type: "shaped",
+    pattern: [" II", " SI", " S "],
+    key: { I: "iron_ingot", S: "stick" },
+    output: { id: "iron_axe", count: 1 },
+    size: [3],
+  },
+  {
+    id: "iron_shovel",
+    type: "shaped",
+    pattern: [" I ", " S ", " S "],
+    key: { I: "iron_ingot", S: "stick" },
+    output: { id: "iron_shovel", count: 1 },
+    size: [3],
+  },
+  {
+    id: "iron_helmet",
+    type: "shaped",
+    pattern: ["III", "I I"],
+    key: { I: "iron_ingot" },
+    output: { id: "iron_helmet", count: 1 },
+    size: [3],
+  },
+  {
+    id: "iron_chestplate",
+    type: "shaped",
+    pattern: ["I I", "III", "III"],
+    key: { I: "iron_ingot" },
+    output: { id: "iron_chestplate", count: 1 },
+    size: [3],
+  },
+  {
+    id: "iron_leggings",
+    type: "shaped",
+    pattern: ["III", "I I", "I I"],
+    key: { I: "iron_ingot" },
+    output: { id: "iron_leggings", count: 1 },
+    size: [3],
+  },
+  {
+    id: "iron_boots",
+    type: "shaped",
+    pattern: ["I I", "I I"],
+    key: { I: "iron_ingot" },
+    output: { id: "iron_boots", count: 1 },
+    size: [3],
+  },
+  {
+    id: "bread",
+    type: "shaped",
+    pattern: ["WWW"],
+    key: { W: "wheat" },
+    output: { id: "bread", count: 1 },
+    size: [3],
+  },
 ];
 
 const craftContexts = {
@@ -447,8 +638,10 @@ export const ensureHeldItem = () => {
   return state.heldItem;
 };
 
-const handleSlotInteraction = (slot, isRightClick) => {
+const handleSlotInteraction = (slot, isRightClick, group = null, index = null) => {
   const held = ensureHeldItem();
+  const isArmorGroup = group === "armor";
+  if (isArmorGroup && index == null) return;
   if (slotIsEmpty(held)) {
     if (slotIsEmpty(slot)) return;
     if (isRightClick) {
@@ -461,6 +654,10 @@ const handleSlotInteraction = (slot, isRightClick) => {
       copySlotData(held, slot);
       setSlot(slot, null, 0);
     }
+    return;
+  }
+
+  if (isArmorGroup && !canPlaceInArmorSlot(index, held.id)) {
     return;
   }
 
@@ -531,7 +728,17 @@ const getSlotArrayForGroup = (group) => {
   if (group === "inventory") return inventory;
   if (group === "craft") return craftSlots;
   if (group === "craftTable") return tableCraftSlots;
+  if (group === "armor") return armorSlots;
   return null;
+};
+
+const armorOrder = ["head", "chest", "legs", "feet"];
+
+const canPlaceInArmorSlot = (index, itemId) => {
+  const def = itemDefs[itemId];
+  if (!def || !def.armor) return false;
+  const expected = armorOrder[index];
+  return def.armor.slot === expected;
 };
 
 const handleSlotMouseDown = (event) => {
@@ -550,7 +757,7 @@ const handleSlotMouseDown = (event) => {
 
   const slots = getSlotArrayForGroup(group);
   if (!slots || Number.isNaN(index)) return;
-  handleSlotInteraction(slots[index], isRightClick);
+  handleSlotInteraction(slots[index], isRightClick, group, index);
   updateAllSlotsUI();
 
   if (!isRightClick && state.heldItem && !slotIsEmpty(state.heldItem)) {
@@ -614,7 +821,7 @@ document.addEventListener("mouseup", (event) => {
   const index = Number(slotEl.dataset.index);
   const slots = getSlotArrayForGroup(group);
   if (!slots || Number.isNaN(index)) return;
-  handleSlotInteraction(slots[index], state.dragButton === 2);
+  handleSlotInteraction(slots[index], state.dragButton === 2, group, index);
   updateAllSlotsUI();
 });
 
@@ -634,6 +841,10 @@ export const updateAllSlotsUI = () => {
   slotUIs.craftTable.forEach((ui) => {
     const idx = Number(ui.slotEl.dataset.index);
     updateSlotUI(ui, tableCraftSlots[idx]);
+  });
+  slotUIs.armor.forEach((ui) => {
+    const idx = Number(ui.slotEl.dataset.index);
+    updateSlotUI(ui, armorSlots[idx]);
   });
   updateCraftOutput("inventory");
   updateCraftOutput("table");
@@ -727,4 +938,22 @@ export const showItemName = () => {
   itemNameTimeout = setTimeout(() => {
     itemNameEl.style.opacity = "0";
   }, 3000);
+};
+
+export const getArmorValue = () => {
+  let total = 0;
+  for (const slot of armorSlots) {
+    if (!slot || slotIsEmpty(slot)) continue;
+    const def = itemDefs[slot.id];
+    if (def?.armor?.defense) total += def.armor.defense;
+  }
+  return total;
+};
+
+export const getWeaponDamage = () => {
+  const slot = getSelectedSlot();
+  if (!slot || slotIsEmpty(slot)) return 2;
+  const def = itemDefs[slot.id];
+  if (def?.weapon?.damage) return def.weapon.damage;
+  return 2;
 };

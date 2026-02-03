@@ -613,7 +613,7 @@ export const updateChatDisplay = () => {
 updateChatDisplay.lastUpdate = 0;
 
 window.addEventListener("keydown", (event) => {
-  if (state.chatOpen || state.inventoryOpen || state.craftingTableOpen) return;
+  if (state.chatOpen || state.inventoryOpen || state.craftingTableOpen || state.furnaceOpen || state.chestOpen) return;
   if (state.mode !== "playing") return;
   if (event.code === "KeyT") {
     openChat("");

@@ -209,3 +209,8 @@ Teszt:
 - Test-only showblocks mód: `?test=1&showblocks=1` kis blokk-sor spawn előtt + kamera lejtés, gyors textúra ellenőrzéshez.
 - Playwright futtatva textúra ellenőrzéshez: output/texture-check4/shot-0.png + state-0.json.
 - showblocks preview sor bővítve minden blokkra (1–19), torch floor orientációval; Playwright futtatva: output/texture-check5/shot-0.png + state-0.json.
+- Singleplayer mentés/betöltés bevezetve (localStorage): világ delta (block edit lista), játékos állapot, inventory/hotbar, idő, gamemode, mob + item entity snapshotok (js/save.js).
+- Autosave (20s), manual save: „Mentés és kilépés” gomb + beforeunload mentés (js/main.js).
+- applySnapshot bővítve mentésből történő block apply-hez (skipSave), spawnInitialMobs csak friss világban.
+- World edit delta nyilvántartás (js/world.js) + save skip a teszt/preview módokban.
+- Playwright futtatva: output/web-game/shot-0.png + state-0.json OK.

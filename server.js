@@ -121,6 +121,35 @@ const send = (ws, payload) => {
   ws.send(JSON.stringify(payload));
 };
 
+const consumeTokens = (client, cost = 1) => {
+  if (!client) return false;
+  const now = Date.now();
+  if (!client.rate) {
+    client.rate = { tokens: 20, last: now };
+  }
+  const rate = client.rate;
+  const elapsed = Math.max(0, (now - rate.last) / 1000);
+  rate.tokens = Math.min(30, rate.tokens + elapsed * 10);
+  rate.last = now;
+  if (rate.tokens < cost) return false;
+  rate.tokens -= cost;
+  return true;
+};
+
+const getClientPos = (client) => {
+  if (!client?.lastState) return null;
+  return { x: client.lastState.x, y: client.lastState.y, z: client.lastState.z };
+};
+
+const withinDistance = (client, x, y, z, maxDist = 8) => {
+  const pos = getClientPos(client);
+  if (!pos) return true;
+  const dx = x - pos.x;
+  const dy = y - pos.y;
+  const dz = z - pos.z;
+  return dx * dx + dy * dy + dz * dz <= maxDist * maxDist;
+};
+
 const broadcast = (room, payload, exceptId = null) => {
   for (const [id, client] of room.clients.entries()) {
     if (exceptId && id === exceptId) continue;
@@ -236,6 +265,7 @@ wss.on("connection", (ws) => {
         name,
         lastState: null,
         lastData: null,
+        rate: { tokens: 20, last: Date.now() },
       });
 
       const savedPlayerData = room.playersByName?.get(name) || null;
@@ -260,6 +290,7 @@ wss.on("connection", (ws) => {
     if (message.type === "player_state") {
       const client = room.clients.get(clientId);
       if (!client) return;
+      if (!consumeTokens(client, 1)) return;
       const state = {
         id: clientId,
         name: client.name,
@@ -283,15 +314,26 @@ wss.on("connection", (ws) => {
     }
 
     if (message.type === "block_update") {
+      const client = room.clients.get(clientId);
+      if (!client || !consumeTokens(client, 2)) return;
       const updates = Array.isArray(message.updates) ? message.updates : [];
+      const limitedUpdates = updates.slice(0, 128).filter((update) => {
+        if (!update || typeof update.key !== "string") return false;
+        const [sx, sy, sz] = update.key.split(",");
+        const x = Number(sx);
+        const y = Number(sy);
+        const z = Number(sz);
+        if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return false;
+        return withinDistance(client, x, y, z, 8);
+      });
       if (room.hostId && room.hostId !== clientId) {
         const host = room.clients.get(room.hostId);
         if (host) {
-          send(host.ws, { type: "action", from: clientId, action: { kind: "block_update", updates } });
+          send(host.ws, { type: "action", from: clientId, action: { kind: "block_update", updates: limitedUpdates } });
         }
         return;
       }
-      for (const update of updates) {
+      for (const update of limitedUpdates) {
         if (!update || typeof update.key !== "string") continue;
         room.blocks.set(update.key, {
           type: update.type ?? 0,
@@ -300,11 +342,13 @@ wss.on("connection", (ws) => {
         });
       }
       scheduleSave(room);
-      broadcast(room, { type: "block_update", updates, sourceId: clientId }, clientId);
+      broadcast(room, { type: "block_update", updates: limitedUpdates, sourceId: clientId }, clientId);
       return;
     }
 
     if (message.type === "entities") {
+      const client = room.clients.get(clientId);
+      if (!client || !consumeTokens(client, 2)) return;
       if (room.hostId !== clientId) return;
       if (Number.isFinite(message.timeOfDay)) room.timeOfDay = message.timeOfDay;
       if (Array.isArray(message.mobs)) room.mobs = message.mobs;
@@ -315,6 +359,8 @@ wss.on("connection", (ws) => {
     }
 
     if (message.type === "chat") {
+      const client = room.clients.get(clientId);
+      if (!client || !consumeTokens(client, 1)) return;
       const text = (message.text || "").toString().slice(0, 200);
       if (!text) return;
       const kind = typeof message.kind === "string" ? message.kind : null;
@@ -329,16 +375,31 @@ wss.on("connection", (ws) => {
     }
 
     if (message.type === "action") {
+      const client = room.clients.get(clientId);
+      if (!client || !consumeTokens(client, 2)) return;
       if (!room.hostId) return;
       const host = room.clients.get(room.hostId);
       if (!host) return;
-      send(host.ws, { type: "action", from: clientId, action: message.action || {} });
+      const action = message.action || {};
+      if (action.kind === "block_update" && Array.isArray(action.updates)) {
+        action.updates = action.updates.slice(0, 128).filter((update) => {
+          if (!update || typeof update.key !== "string") return false;
+          const [sx, sy, sz] = update.key.split(",");
+          const x = Number(sx);
+          const y = Number(sy);
+          const z = Number(sz);
+          if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return false;
+          return withinDistance(client, x, y, z, 8);
+        });
+      }
+      send(host.ws, { type: "action", from: clientId, action });
       return;
     }
 
     if (message.type === "player_data") {
       const client = room.clients.get(clientId);
       if (!client) return;
+      if (!consumeTokens(client, 1)) return;
       const data = {
         hotbar: Array.isArray(message.hotbar) ? message.hotbar : null,
         inventory: Array.isArray(message.inventory) ? message.inventory : null,
@@ -356,6 +417,8 @@ wss.on("connection", (ws) => {
     }
 
     if (message.type === "player_damage") {
+      const client = room.clients.get(clientId);
+      if (!client || !consumeTokens(client, 1)) return;
       if (room.hostId !== clientId) return;
       const targetId = message.targetId ? String(message.targetId) : null;
       const amount = Number.isFinite(message.amount) ? message.amount : 1;
@@ -378,6 +441,13 @@ wss.on("connection", (ws) => {
         health: updatedHealth,
         from: clientId,
       });
+      return;
+    }
+
+    if (message.type === "request_snapshot") {
+      const client = room.clients.get(clientId);
+      if (!client || !consumeTokens(client, 1)) return;
+      send(ws, { type: "snapshot", snapshot: roomSnapshot(room) });
       return;
     }
   });

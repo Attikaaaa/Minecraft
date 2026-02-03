@@ -7,12 +7,16 @@ import {
   canPlaceSelected,
   getSelectedItemId,
   getSelectedSlot,
+  getArmorValue,
+  armorSlots,
   setSlot,
   slotIsEmpty,
   updateAllSlotsUI,
 } from "./inventory.js";
 import { getBreakTimeSeconds, getDropForBlock, itemDefs } from "./items.js";
 import { spawnItemDrop } from "./entities.js";
+import { getFurnace, removeFurnace } from "./furnace.js";
+import { getChest, removeChest } from "./chest.js";
 import {
   ensureChunksAround,
   getBlock,
@@ -185,7 +189,13 @@ const checkGrounded = () => {
 };
 
 export const updatePlayer = (dt) => {
-  const movementEnabled = !state.inventoryOpen && !state.craftingTableOpen && !state.chatOpen;
+  const movementEnabled =
+    !state.inventoryOpen &&
+    !state.craftingTableOpen &&
+    !state.chatOpen &&
+    !state.furnaceOpen &&
+    !state.chestOpen &&
+    !state.worldMenuOpen;
   const isCreative = state.gamemode === "creative";
   const isSpectator = state.gamemode === "spectator";
 
@@ -307,6 +317,21 @@ export const updatePlayer = (dt) => {
     if (player.velocity.y < 0) player.velocity.y = 0;
   }
 
+  const ladderBlock = getBlock(
+    Math.floor(player.position.x),
+    Math.floor(player.position.y + 0.1),
+    Math.floor(player.position.z)
+  );
+  const onLadder = blockDefs[ladderBlock]?.climbable;
+  if (onLadder) {
+    player.velocity.y = 0;
+    player.fallDistance = 0;
+    if (movementEnabled) {
+      if (input.jump || input.forward) player.velocity.y = 0.12;
+      if (input.sprint || input.backward) player.velocity.y = -0.12;
+    }
+  }
+
   const dy = player.position.y - startY;
   if (!player.onGround && dy < 0) {
     player.fallDistance += -dy;
@@ -318,8 +343,10 @@ export const updatePlayer = (dt) => {
     player.fallDistance = 0;
   }
 
-  player.velocity.y -= 0.08 * tickScale;
-  player.velocity.y *= Math.pow(0.98, tickScale);
+  if (!onLadder) {
+    player.velocity.y -= 0.08 * tickScale;
+    player.velocity.y *= Math.pow(0.98, tickScale);
+  }
   const frictionFactor = Math.pow(baseFriction, tickScale);
   player.velocity.x *= frictionFactor;
   player.velocity.z *= frictionFactor;
@@ -380,10 +407,39 @@ const completeMining = (blockType) => {
     removeTorchOrientation(tx, ty, tz);
   }
   
+  if (blockType === 20) {
+    const furnace = getFurnace(tx, ty, tz);
+    if (furnace) {
+      if (furnace.input?.id) spawnItemDrop(furnace.input.id, furnace.input.count, tx, ty, tz);
+      if (furnace.fuel?.id) spawnItemDrop(furnace.fuel.id, furnace.fuel.count, tx, ty, tz);
+      if (furnace.output?.id) spawnItemDrop(furnace.output.id, furnace.output.count, tx, ty, tz);
+    }
+    removeFurnace(tx, ty, tz);
+  }
+  if (blockType === 21) {
+    const chest = getChest(tx, ty, tz);
+    if (chest) {
+      for (const slot of chest.slots) {
+        if (slot && slot.id && slot.count > 0) {
+          spawnItemDrop(slot.id, slot.count, tx, ty, tz);
+        }
+      }
+    }
+    removeChest(tx, ty, tz);
+  }
+
   removeBlock(tx, ty, tz);
   if (state.gamemode !== "creative") {
     const drop = getDropForBlock(blockType, toolId);
-    if (drop) spawnItemDrop(drop.id, drop.count, tx, ty, tz);
+    if (drop) {
+      spawnItemDrop(drop.id, drop.count, tx, ty, tz);
+      if (drop.extra?.seeds) {
+        spawnItemDrop("seeds", drop.extra.seeds, tx, ty, tz);
+      }
+    }
+    if (blockType === 1 && Math.random() < 0.2) {
+      spawnItemDrop("seeds", 1, tx, ty, tz);
+    }
     applyToolDamage();
     updateAllSlotsUI();
   }
@@ -394,7 +450,14 @@ export const updateMining = (dt) => {
     resetMining();
     return;
   }
-  if (!input.mining || state.inventoryOpen || state.craftingTableOpen || state.chatOpen) {
+  if (
+    !input.mining ||
+    state.inventoryOpen ||
+    state.craftingTableOpen ||
+    state.chatOpen ||
+    state.furnaceOpen ||
+    state.chestOpen
+  ) {
     resetMining();
     return;
   }
@@ -485,7 +548,22 @@ const triggerDeath = () => {
 export const takeDamage = (amount) => {
   if (state.mode !== "playing") return;
   if (state.gamemode === "creative" || state.gamemode === "spectator") return;
-  player.health = Math.max(0, player.health - amount);
+  const armor = getArmorValue();
+  const reduction = Math.min(0.8, armor * 0.04);
+  const finalAmount = Math.max(0.5, amount * (1 - reduction));
+  player.health = Math.max(0, player.health - finalAmount);
+  if (armor > 0) {
+    for (const slot of armorSlots) {
+      if (!slot || slotIsEmpty(slot)) continue;
+      if (Math.random() < 0.35) {
+        slot.durability = (slot.durability ?? itemDefs[slot.id]?.durability ?? 0) - 1;
+        if (slot.durability <= 0) {
+          setSlot(slot, null, 0);
+        }
+      }
+    }
+    updateAllSlotsUI();
+  }
   if (player.health <= 0) {
     triggerDeath();
   }
@@ -682,7 +760,13 @@ export const updateHud = () => {
   }
   if (handItemEl && handItemIconEl) {
     const icon = selectedId ? itemDefs[selectedId]?.icon : null;
-    const hideHand = state.inventoryOpen || state.craftingTableOpen || state.chatOpen;
+    const hideHand =
+      state.inventoryOpen ||
+      state.craftingTableOpen ||
+      state.chatOpen ||
+      state.furnaceOpen ||
+      state.chestOpen ||
+      state.worldMenuOpen;
     if (selectedId !== lastHandItemId || hideHand !== lastHandHidden) {
       lastHandItemId = selectedId;
       lastHandHidden = hideHand;
