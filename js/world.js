@@ -1,8 +1,8 @@
 import { THREE, scene } from "./scene.js";
-import { CHUNK_RADIUS, CHUNK_SIZE, SEA_LEVEL, WORLD_MAX_HEIGHT, clamp } from "./config.js";
+import { CHUNK_RADIUS, CHUNK_SIZE, SEA_LEVEL, WORLD_MAX_HEIGHT, clamp, randomSeed, urlParams } from "./config.js";
 import { noise2D, noise3D, hash2, smoothstep } from "./noise.js";
 import { blockDefs } from "./textures.js";
-import { atlasMaterials } from "./atlas.js";
+import { atlasMaterials, blockFaceTiles, blockRenderGroups, blockMapFaces } from "./atlas.js";
 import { buildChunkMeshBuffers } from "./mesher.js";
 import { state } from "./state.js";
 import { createWaterSystem } from "./water.js";
@@ -61,11 +61,14 @@ const createChunk = (cx, cz) => {
     cx,
     cz,
     blocks: new Uint16Array(blocksPerChunk),
+    water: new Uint8Array(blocksPerChunk),
     generated: false,
     loaded: false,
     dirty: false,
     genQueued: false,
     meshQueued: false,
+    meshInFlight: false,
+    meshNeedsRebuild: false,
     shouldBeLoaded: false,
     group: null,
     meshes: {
@@ -88,11 +91,40 @@ export const getBlock = (x, y, z) => {
   return chunk.blocks[blockIndex(lx, y, lz)] || 0;
 };
 
-const setBlockInChunk = (chunk, lx, y, lz, type) => {
+export const getWaterLevel = (x, y, z) => {
+  if (!isWithinWorld(x, y, z)) return 0;
+  const { cx, cz, lx, lz } = worldToChunk(x, z);
+  const chunk = getChunk(cx, cz);
+  if (!chunk || !chunk.generated) return 0;
+  const idx = blockIndex(lx, y, lz);
+  if (chunk.blocks[idx] !== 8) return 0;
+  return decodeWaterLevel(chunk.water[idx]);
+};
+
+export const setWaterLevel = (x, y, z, level, clearOnly = false) => {
+  if (!isWithinWorld(x, y, z)) return;
+  const { cx, cz, lx, lz } = worldToChunk(x, z);
+  const chunk = getChunk(cx, cz);
+  if (!chunk || !chunk.generated) return;
+  const idx = blockIndex(lx, y, lz);
+  if (clearOnly) {
+    chunk.water[idx] = 0;
+    return;
+  }
+  if (chunk.blocks[idx] !== 8) return;
+  chunk.water[idx] = encodeWaterLevel(level);
+};
+
+const setBlockInChunk = (chunk, lx, y, lz, type, waterLevel = null) => {
   const idx = blockIndex(lx, y, lz);
   const prev = chunk.blocks[idx] || 0;
   if (prev === type) return prev;
   chunk.blocks[idx] = type;
+  if (type === 8) {
+    chunk.water[idx] = encodeWaterLevel(waterLevel ?? 0);
+  } else {
+    chunk.water[idx] = 0;
+  }
   if (prev === 0 && type !== 0) state.blocks += 1;
   if (prev !== 0 && type === 0) state.blocks = Math.max(0, state.blocks - 1);
   return prev;
@@ -101,6 +133,10 @@ const setBlockInChunk = (chunk, lx, y, lz, type) => {
 const markChunkDirty = (chunk) => {
   if (!chunk) return;
   chunk.dirty = true;
+  if (chunk.meshInFlight) {
+    chunk.meshNeedsRebuild = true;
+    return;
+  }
   if (!chunk.meshQueued) {
     chunk.meshQueued = true;
     enqueue(meshQueue, chunk);
@@ -121,6 +157,11 @@ const setGeneratedBlock = (x, y, z, type) => {
   const prev = chunk.blocks[blockIndex(lx, y, lz)] || 0;
   if (prev !== 0) return;
   chunk.blocks[blockIndex(lx, y, lz)] = type;
+  if (type === 8) {
+    chunk.water[blockIndex(lx, y, lz)] = encodeWaterLevel(0);
+  } else {
+    chunk.water[blockIndex(lx, y, lz)] = 0;
+  }
   state.blocks += 1;
   if (chunk.generated) {
     markChunkDirty(chunk);
@@ -352,7 +393,7 @@ const applyBuffersToMesh = (chunk, key, buffers, material) => {
   }
 };
 
-const rebuildChunkMesh = (chunk) => {
+const applyChunkMeshBuffers = (chunk, buffers) => {
   if (!chunk.generated) return;
   if (!chunk.group) {
     chunk.group = new THREE.Group();
@@ -361,14 +402,20 @@ const rebuildChunkMesh = (chunk) => {
     scene.add(chunk.group);
   }
 
-  const buffers = buildChunkMeshBuffers(chunk, getBlock);
   applyBuffersToMesh(chunk, "opaque", buffers.opaque, atlasMaterials.opaque);
   applyBuffersToMesh(chunk, "cutout", buffers.cutout, atlasMaterials.cutout);
   applyBuffersToMesh(chunk, "water", buffers.water, atlasMaterials.water);
 
   chunk.dirty = false;
   chunk.meshQueued = false;
+  chunk.meshInFlight = false;
   chunk.loaded = true;
+};
+
+const rebuildChunkMesh = (chunk) => {
+  if (!chunk.generated) return;
+  const buffers = buildChunkMeshBuffers(chunk, getBlock);
+  applyChunkMeshBuffers(chunk, buffers);
 };
 
 const unloadChunk = (chunk) => {
@@ -384,15 +431,131 @@ const unloadChunk = (chunk) => {
   chunk.meshes.cutout = null;
   chunk.meshes.water = null;
   chunk.loaded = false;
+  chunk.meshQueued = false;
+  chunk.meshInFlight = false;
+  chunk.meshNeedsRebuild = false;
 };
 
 const genQueue = createQueue();
 const meshQueue = createQueue();
+const meshApplyQueue = createQueue();
+const meshJobs = new Map();
+let meshWorker = null;
+let meshWorkerAvailable = typeof Worker !== "undefined";
+const meshWorkerDisabled =
+  urlParams.get("mesher")?.toLowerCase() === "main" || urlParams.get("meshworker") === "0";
+if (meshWorkerDisabled) meshWorkerAvailable = false;
+let meshJobId = 1;
+const worldTimings = {
+  genMs: 0,
+  meshMs: 0,
+  waterMs: 0,
+  workerMeshMs: 0,
+};
+
+const faceSize = WORLD_MAX_HEIGHT * CHUNK_SIZE;
+
+const extractNeighborFace = (neighbor, face) => {
+  const data = new Uint16Array(faceSize);
+  if (!neighbor || !neighbor.generated) return data;
+  for (let y = 0; y < WORLD_MAX_HEIGHT; y += 1) {
+    for (let offset = 0; offset < CHUNK_SIZE; offset += 1) {
+      let lx = offset;
+      let lz = offset;
+      if (face === "left") lx = CHUNK_SIZE - 1;
+      if (face === "right") lx = 0;
+      if (face === "back") lz = CHUNK_SIZE - 1;
+      if (face === "front") lz = 0;
+      const idx = blockIndex(lx, y, lz);
+      data[y * CHUNK_SIZE + offset] = neighbor.blocks[idx] || 0;
+    }
+  }
+  return data;
+};
+
+const initMeshWorker = () => {
+  if (!meshWorkerAvailable || meshWorker) return;
+  try {
+    meshWorker = new Worker(new URL("./mesher-worker.js", import.meta.url), { type: "module" });
+  } catch (err) {
+    console.warn("Failed to start meshing worker", err);
+    meshWorkerAvailable = false;
+    meshWorker = null;
+    return;
+  }
+  meshWorker.postMessage({
+    type: "init",
+    chunkSize: CHUNK_SIZE,
+    worldHeight: WORLD_MAX_HEIGHT,
+    randomSeed,
+    blockFaceTiles,
+    blockRenderGroups,
+    blockMapFaces,
+  });
+  meshWorker.onmessage = (event) => {
+    const payload = event.data;
+    if (!payload || payload.type !== "meshResult") return;
+    enqueue(meshApplyQueue, payload);
+  };
+  meshWorker.onerror = (err) => {
+    console.warn("Meshing worker error", err);
+    meshWorkerAvailable = false;
+    meshWorker = null;
+  };
+};
 
 const queueGenerate = (chunk) => {
   if (chunk.genQueued) return;
   chunk.genQueued = true;
   enqueue(genQueue, chunk);
+};
+
+const sendMeshJob = (chunk) => {
+  if (!chunk.generated) return;
+  if (!meshWorkerAvailable || !meshWorker) {
+    rebuildChunkMesh(chunk);
+    return;
+  }
+  const left = extractNeighborFace(getChunk(chunk.cx - 1, chunk.cz), "left");
+  const right = extractNeighborFace(getChunk(chunk.cx + 1, chunk.cz), "right");
+  const back = extractNeighborFace(getChunk(chunk.cx, chunk.cz - 1), "back");
+  const front = extractNeighborFace(getChunk(chunk.cx, chunk.cz + 1), "front");
+  const blocksCopy = chunk.blocks.slice();
+  const jobId = meshJobId++;
+  chunk.meshInFlight = true;
+  meshJobs.set(jobId, { chunk, sentAt: performance.now() });
+  meshWorker.postMessage(
+    {
+      type: "mesh",
+      jobId,
+      cx: chunk.cx,
+      cz: chunk.cz,
+      blocks: blocksCopy,
+      neighbors: { left, right, back, front },
+    },
+    [blocksCopy.buffer, left.buffer, right.buffer, back.buffer, front.buffer]
+  );
+};
+
+const drainMeshApplyQueue = (budgetMs) => {
+  const start = performance.now();
+  while (queueSize(meshApplyQueue) && performance.now() - start < budgetMs) {
+    const payload = dequeue(meshApplyQueue);
+    if (!payload || payload.type !== "meshResult") continue;
+    const job = meshJobs.get(payload.jobId);
+    if (!job) continue;
+    meshJobs.delete(payload.jobId);
+    const chunk = job.chunk;
+    chunk.meshInFlight = false;
+    if (!chunk.shouldBeLoaded) continue;
+    applyChunkMeshBuffers(chunk, payload.buffers);
+    worldTimings.workerMeshMs = payload.timeMs || 0;
+    if (chunk.meshNeedsRebuild) {
+      chunk.meshNeedsRebuild = false;
+      markChunkDirty(chunk);
+    }
+  }
+  worldTimings.meshMs = performance.now() - start;
 };
 
 export const ensureChunksAround = (x, z) => {
@@ -436,7 +599,9 @@ export const ensureChunksAround = (x, z) => {
 
 export const updateWorld = () => {
   const genBudgetMs = 2.5;
-  const meshBudgetMs = 2.5;
+  const meshBudgetMs = 1.5;
+  const meshApplyBudgetMs = 1.5;
+  const maxMeshJobsPerFrame = 2;
   const startGen = performance.now();
   while (queueSize(genQueue) && performance.now() - startGen < genBudgetMs) {
     const chunk = dequeue(genQueue);
@@ -444,26 +609,52 @@ export const updateWorld = () => {
     chunk.genQueued = false;
     generateChunk(chunk);
   }
+  worldTimings.genMs = performance.now() - startGen;
 
-  const startMesh = performance.now();
-  while (queueSize(meshQueue) && performance.now() - startMesh < meshBudgetMs) {
-    const chunk = dequeue(meshQueue);
-    if (!chunk) break;
-    if (!chunk.shouldBeLoaded) {
+  if (meshWorkerAvailable && meshWorker) {
+    let jobs = 0;
+    const startMesh = performance.now();
+    while (queueSize(meshQueue) && performance.now() - startMesh < meshBudgetMs && jobs < maxMeshJobsPerFrame) {
+      const chunk = dequeue(meshQueue);
+      if (!chunk) break;
       chunk.meshQueued = false;
-      continue;
+      if (!chunk.shouldBeLoaded) continue;
+      sendMeshJob(chunk);
+      jobs += 1;
     }
-    rebuildChunkMesh(chunk);
+    drainMeshApplyQueue(meshApplyBudgetMs);
+  } else {
+    const startMesh = performance.now();
+    while (queueSize(meshQueue) && performance.now() - startMesh < meshBudgetMs) {
+      const chunk = dequeue(meshQueue);
+      if (!chunk) break;
+      if (!chunk.shouldBeLoaded) {
+        chunk.meshQueued = false;
+        continue;
+      }
+      rebuildChunkMesh(chunk);
+    }
+    worldTimings.meshMs = performance.now() - startMesh;
+  }
+
+  if (waterSystem) {
+    const waterStart = performance.now();
+    waterSystem.update(1.25, 220);
+    worldTimings.waterMs = performance.now() - waterStart;
+  } else {
+    worldTimings.waterMs = 0;
   }
 };
 
-export const setBlock = (x, y, z, type) => {
+let waterSystem = null;
+
+export const setBlock = (x, y, z, type, options = {}) => {
   if (!isWithinWorld(x, y, z)) return false;
   const { cx, cz, lx, lz } = worldToChunk(x, z);
   const chunk = createChunk(cx, cz);
   if (!chunk.generated) generateChunk(chunk);
 
-  const prev = setBlockInChunk(chunk, lx, y, lz, type);
+  const prev = setBlockInChunk(chunk, lx, y, lz, type, options.waterLevel ?? null);
   if (prev === type) return true;
 
   markChunkDirty(chunk);
@@ -471,6 +662,9 @@ export const setBlock = (x, y, z, type) => {
   if (lx === CHUNK_SIZE - 1) markNeighborDirty(cx + 1, cz);
   if (lz === 0) markNeighborDirty(cx, cz - 1);
   if (lz === CHUNK_SIZE - 1) markNeighborDirty(cx, cz + 1);
+  if (!options.skipWater && waterSystem) {
+    waterSystem.onBlockChanged(x, y, z, prev, type);
+  }
   return true;
 };
 
@@ -490,8 +684,18 @@ const clearSpawnArea = () => {
 
 export const initializeWorld = () => {
   if (state.worldInitialized) return;
+  initMeshWorker();
   ensureChunksAround(spawn.x, spawn.z);
   clearSpawnArea();
+  if (!waterSystem) {
+    waterSystem = createWaterSystem({
+      getBlock,
+      setBlock,
+      getWaterLevel,
+      setWaterLevel,
+      isWithinWorld,
+    });
+  }
   state.worldInitialized = true;
 };
 
@@ -516,5 +720,8 @@ export const getWorldStats = () => {
     dirtyQueue: dirtyChunks,
     genQueue: queueSize(genQueue),
     meshQueue: queueSize(meshQueue),
+    waterQueue: waterSystem ? waterSystem.getQueueSize() : 0,
   };
 };
+
+export const getWorldTimings = () => ({ ...worldTimings });

@@ -1,5 +1,5 @@
 import { renderer } from "./scene.js";
-import { getWorldStats } from "./world.js";
+import { getWorldStats, getWorldTimings } from "./world.js";
 import { clamp } from "./config.js";
 
 const SAMPLE_SIZE = 300;
@@ -53,13 +53,34 @@ let benchStart = 0;
 let benchDuration = 30000;
 let benchLabel = "default";
 let benchFrameTimes = [];
+let benchMeta = {};
+const benchTimingSums = {
+  renderMs: 0,
+  worldMs: 0,
+  uiMs: 0,
+  meshMs: 0,
+  waterMs: 0,
+};
+let benchTimingFrames = 0;
+const lastTimings = {
+  renderMs: 0,
+  worldMs: 0,
+  uiMs: 0,
+};
 
-export const startBenchmark = (durationMs = 30000, label = "default") => {
+export const startBenchmark = (durationMs = 30000, label = "default", meta = {}) => {
   benchActive = true;
   benchStart = performance.now();
   benchDuration = durationMs;
   benchLabel = label;
+  benchMeta = { ...meta };
   benchFrameTimes = [];
+  benchTimingFrames = 0;
+  benchTimingSums.renderMs = 0;
+  benchTimingSums.worldMs = 0;
+  benchTimingSums.uiMs = 0;
+  benchTimingSums.meshMs = 0;
+  benchTimingSums.waterMs = 0;
 };
 
 const finishBenchmark = () => {
@@ -71,23 +92,55 @@ const finishBenchmark = () => {
   const avgMs = sum / count;
   const p99Index = Math.max(0, Math.floor(count * 0.99) - 1);
   const p99Ms = temp[p99Index] || 0;
-  const fps = avgMs > 0 ? 1000 / avgMs : 0;
+  const worstMs = temp[count - 1] || 0;
+  const avgFps = avgMs > 0 ? 1000 / avgMs : 0;
+  const fps1Low = p99Ms > 0 ? 1000 / p99Ms : 0;
   const info = renderer.info.render;
   const worldStats = getWorldStats();
+  const timingDiv = benchTimingFrames || count || 1;
+  const timingAverages = {
+    render: benchTimingSums.renderMs / timingDiv,
+    worldTick: benchTimingSums.worldMs / timingDiv,
+    meshingApply: benchTimingSums.meshMs / timingDiv,
+    waterTick: benchTimingSums.waterMs / timingDiv,
+    ui: benchTimingSums.uiMs / timingDiv,
+  };
   const payload = {
     label: benchLabel,
+    scenario: benchMeta.scenario ?? benchLabel,
+    seed: benchMeta.seed ?? null,
     durationMs: benchDuration,
     samples: count,
+    avgFps: Number(avgFps.toFixed(1)),
+    fps1Low: Number(fps1Low.toFixed(1)),
+    avgFrameMs: Number(avgMs.toFixed(3)),
+    p99FrameMs: Number(p99Ms.toFixed(3)),
+    worstFrameMs: Number(worstMs.toFixed(3)),
     avgMs: Number(avgMs.toFixed(3)),
     p99Ms: Number(p99Ms.toFixed(3)),
-    fps: Number(fps.toFixed(1)),
+    fps: Number(avgFps.toFixed(1)),
     drawCalls: info.calls,
     triangles: info.triangles,
+    chunksRendered: worldStats.loadedChunks,
     chunks: worldStats.chunks,
     loadedChunks: worldStats.loadedChunks,
+    queues: {
+      dirtyChunks: worldStats.dirtyQueue,
+      genQueue: worldStats.genQueue,
+      meshQueue: worldStats.meshQueue,
+      waterQueue: worldStats.waterQueue,
+    },
     dirtyChunks: worldStats.dirtyQueue,
     meshingQueue: worldStats.meshQueue,
     generationQueue: worldStats.genQueue,
+    waterQueue: worldStats.waterQueue,
+    timingsMs: {
+      render: Number(timingAverages.render.toFixed(3)),
+      worldTick: Number(timingAverages.worldTick.toFixed(3)),
+      meshingApply: Number(timingAverages.meshingApply.toFixed(3)),
+      waterTick: Number(timingAverages.waterTick.toFixed(3)),
+      ui: Number(timingAverages.ui.toFixed(3)),
+    },
   };
   console.log("PERF_BENCH", JSON.stringify(payload));
 };
@@ -112,6 +165,22 @@ export const recordFrameTime = (dt) => {
   }
 };
 
+export const setPerfTimings = (timings) => {
+  if (!timings) return;
+  if (Number.isFinite(timings.renderMs)) lastTimings.renderMs = timings.renderMs;
+  if (Number.isFinite(timings.worldMs)) lastTimings.worldMs = timings.worldMs;
+  if (Number.isFinite(timings.uiMs)) lastTimings.uiMs = timings.uiMs;
+  if (benchActive) {
+    benchTimingFrames += 1;
+    benchTimingSums.renderMs += lastTimings.renderMs;
+    benchTimingSums.worldMs += lastTimings.worldMs;
+    benchTimingSums.uiMs += lastTimings.uiMs;
+    const worldTimings = getWorldTimings();
+    benchTimingSums.meshMs += worldTimings.meshMs;
+    benchTimingSums.waterMs += worldTimings.waterMs;
+  }
+};
+
 export const updatePerfOverlay = () => {
   if (!overlayEnabled) return;
   const now = performance.now();
@@ -120,7 +189,9 @@ export const updatePerfOverlay = () => {
 
   const stats = computeStats();
   const info = renderer.info.render;
+  const memoryInfo = renderer.info.memory || {};
   const worldStats = getWorldStats();
+  const worldTimings = getWorldTimings();
   const memory = performance.memory
     ? `${formatNumber(performance.memory.usedJSHeapSize / 1048576, 1)}MB`
     : "n/a";
@@ -128,8 +199,10 @@ export const updatePerfOverlay = () => {
   overlayEl.textContent =
     `FPS: ${formatNumber(stats.fps, 1)}\n` +
     `Avg: ${formatNumber(stats.avgMs, 2)}ms  P99: ${formatNumber(stats.p99Ms, 2)}ms\n` +
-    `Draw: ${info.calls}  Tris: ${info.triangles}\n` +
+    `Draw: ${info.calls}  Tris: ${info.triangles}  Geom: ${memoryInfo.geometries ?? 0}\n` +
     `Chunks: ${worldStats.loadedChunks}/${worldStats.chunks}  Dirty: ${worldStats.dirtyQueue}\n` +
-    `GenQ: ${worldStats.genQueue}  MeshQ: ${worldStats.meshQueue}\n` +
+    `MeshQ: ${worldStats.meshQueue}  GenQ: ${worldStats.genQueue}  WaterQ: ${worldStats.waterQueue}\n` +
+    `Render: ${formatNumber(lastTimings.renderMs, 2)}ms  World: ${formatNumber(lastTimings.worldMs, 2)}ms\n` +
+    `Mesh: ${formatNumber(worldTimings.meshMs, 2)}ms  Water: ${formatNumber(worldTimings.waterMs, 2)}ms  UI: ${formatNumber(lastTimings.uiMs, 2)}ms\n` +
     `Heap: ${memory}`;
 };

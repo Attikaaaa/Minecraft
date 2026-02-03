@@ -34,6 +34,7 @@ export const TABLE_CRAFT_SIZE = 9;
 export const randomSeed = (() => {
   const urlSeed = urlParams.get("seed");
   if (urlSeed && Number.isFinite(Number(urlSeed))) return Number(urlSeed);
+  if (urlParams.get("bench") === "1") return 1337;
   return Math.floor(Math.random() * 1_000_000_000);
 })();
 

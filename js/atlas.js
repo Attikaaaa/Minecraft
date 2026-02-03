@@ -37,6 +37,7 @@ const registerTexture = (materialOrTexture) => {
 
 const blockFaceTiles = {};
 const blockRenderGroups = {};
+const blockMapFaces = {};
 
 for (const [rawType, def] of Object.entries(blockDefs)) {
   const type = Number(rawType);
@@ -50,6 +51,7 @@ for (const [rawType, def] of Object.entries(blockDefs)) {
   });
   blockFaceTiles[type] = variantTiles;
   blockRenderGroups[type] = def.renderGroup || (def.solid === false ? "cutout" : "opaque");
+  blockMapFaces[type] = def.mapFace || null;
 }
 
 const buildAtlas = () => {
@@ -171,3 +173,5 @@ export const atlasInfo = {
   tilesPerRow: atlas.tilesPerRow,
   tilesPerCol: atlas.tilesPerCol,
 };
+
+export { blockFaceTiles, blockRenderGroups, blockMapFaces };

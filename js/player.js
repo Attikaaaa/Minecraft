@@ -638,5 +638,8 @@ export const updateGame = (dt) => {
   updateTarget();
   updateMining(dt);
   updateSurvival(dt);
+  const uiStart = performance.now();
   updateHud();
+  const uiMs = performance.now() - uiStart;
+  return { uiMs };
 };

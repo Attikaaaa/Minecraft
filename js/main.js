@@ -24,7 +24,7 @@ import {
 } from "./inventory.js";
 import { itemEntities, updateItemEntities } from "./entities.js";
 import { killPlayer, player, placeBlock, resetMining, teleportPlayer, tryConsumeFood, updateGame } from "./player.js";
-import { getBlock, initializeWorld, spawn } from "./world.js";
+import { getBlock, initializeWorld, isWithinWorld, setBlock, spawn } from "./world.js";
 import { canvas, hud, menu, startBtn } from "./dom.js";
 import { lockPointer, unlockPointer } from "./controls.js";
 import { attackMob, spawnInitialMobs, spawnMob, updateMobTarget, updateMobs } from "./mobs.js";
@@ -33,7 +33,7 @@ import { getMobs } from "./mobs.js";
 import { closeChat, isChatOpen, openChat, updateChatDisplay } from "./chat.js";
 import { setTimeOfDay } from "./time.js";
 import { advanceTime, initTime } from "./time.js";
-import { recordFrameTime, startBenchmark, togglePerfOverlay, updatePerfOverlay } from "./perf.js";
+import { recordFrameTime, setPerfTimings, startBenchmark, togglePerfOverlay, updatePerfOverlay } from "./perf.js";
 
 const resize = () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -55,60 +55,174 @@ const toggleFullscreen = async () => {
 const pointerActive = () =>
   document.pointerLockElement === canvas || disablePointerLock || navigator.webdriver;
 
+const BENCH_DURATION_MS = 30000;
+const BENCH_SPAM_INTERVAL_MS = 100;
+const BENCH_BLOCK_TYPE = 11;
+
+const normalizeBenchScenario = (value) => {
+  if (!value) return "A";
+  const normalized = value.trim().toUpperCase();
+  if (normalized === "B" || normalized === "C") return normalized;
+  return "A";
+};
+
+const benchState = {
+  enabled: urlParams.get("bench") === "1",
+  scenario: normalizeBenchScenario(urlParams.get("scenario")),
+  started: false,
+  startAt: 0,
+  actionTimerMs: 0,
+  actionPhase: 0,
+  target: null,
+};
+
+const resetBenchInput = () => {
+  input.forward = false;
+  input.backward = false;
+  input.left = false;
+  input.right = false;
+  input.jump = false;
+  input.sprint = false;
+  input.boost = false;
+  input.mining = false;
+  resetMining();
+};
+
+const computeBenchTarget = () => {
+  const distance = 3;
+  const forwardX = Math.sin(player.yaw);
+  const forwardZ = Math.cos(player.yaw);
+  const x = Math.round(player.position.x + forwardX * distance);
+  const z = Math.round(player.position.z + forwardZ * distance);
+  const y = Math.round(player.position.y + 1);
+  if (!isWithinWorld(x, y, z)) return null;
+  return { x, y, z };
+};
+
+const prepareBenchStart = () => {
+  const startPos = {
+    x: spawn.x + 0.5,
+    y: Math.max(spawn.height + 2, SEA_LEVEL + 2),
+    z: spawn.z + 0.5,
+  };
+  teleportPlayer(startPos.x, startPos.y, startPos.z);
+  player.yaw = 0;
+  player.pitch = 0;
+  resetBenchInput();
+  benchState.actionTimerMs = 0;
+  benchState.actionPhase = 0;
+  benchState.target = computeBenchTarget();
+  if (benchState.target) {
+    setBlock(benchState.target.x, benchState.target.y, benchState.target.z, 0);
+  }
+};
+
+const startBenchScenario = () => {
+  benchState.started = true;
+  benchState.startAt = performance.now();
+  benchState.actionTimerMs = 0;
+  benchState.actionPhase = 0;
+  startBenchmark(BENCH_DURATION_MS, `scenario-${benchState.scenario}`, {
+    scenario: benchState.scenario,
+    seed: randomSeed,
+  });
+};
+
+const updateBenchScenario = (dt) => {
+  if (!benchState.started) return;
+  const elapsedMs = performance.now() - benchState.startAt;
+  if (elapsedMs >= BENCH_DURATION_MS) {
+    benchState.started = false;
+    resetBenchInput();
+    return;
+  }
+
+  player.yaw = 0;
+  player.pitch = 0;
+
+  if (benchState.scenario === "A") {
+    resetBenchInput();
+    return;
+  }
+
+  if (benchState.scenario === "B") {
+    resetBenchInput();
+    input.forward = true;
+    input.sprint = true;
+    return;
+  }
+
+  if (benchState.scenario === "C") {
+    resetBenchInput();
+    if (!benchState.target) return;
+    benchState.actionTimerMs += dt * 1000;
+    while (benchState.actionTimerMs >= BENCH_SPAM_INTERVAL_MS) {
+      benchState.actionTimerMs -= BENCH_SPAM_INTERVAL_MS;
+      benchState.actionPhase += 1;
+      const shouldPlace = benchState.actionPhase % 2 === 1;
+      const current = getBlock(benchState.target.x, benchState.target.y, benchState.target.z);
+      if (shouldPlace) {
+        if (current === 0) {
+          setBlock(benchState.target.x, benchState.target.y, benchState.target.z, BENCH_BLOCK_TYPE);
+        }
+      } else if (current !== 0) {
+        setBlock(benchState.target.x, benchState.target.y, benchState.target.z, 0);
+      }
+    }
+  }
+};
+
 const applyDebugState = () => {
-  if (urlParams.get("debug") !== "1") return;
-  const gm = urlParams.get("gamemode");
-  if (gm) {
-    const raw = gm.toLowerCase();
-    if (raw.startsWith("spec")) state.gamemode = "spectator";
-    else if (raw.startsWith("cre")) state.gamemode = "creative";
-    else if (raw.startsWith("sur")) state.gamemode = "survival";
-  }
-  const time = urlParams.get("time");
-  if (time) {
-    const t = time.toLowerCase();
-    if (t === "day") setTimeOfDay(0.25);
-    if (t === "night") setTimeOfDay(0.75);
-    if (t === "dawn") setTimeOfDay(0);
-    if (t === "dusk") setTimeOfDay(0.5);
-  }
-  const hand = urlParams.get("hand");
-  if (hand === "torch") {
-    hotbar[0].id = "torch";
-    hotbar[0].count = 64;
-    hotbar[0].durability = null;
-    state.selectedHotbar = 0;
-  }
-  updateAllSlotsUI();
+  const debugEnabled = urlParams.get("debug") === "1";
+  if (debugEnabled) {
+    const gm = urlParams.get("gamemode");
+    if (gm) {
+      const raw = gm.toLowerCase();
+      if (raw.startsWith("spec")) state.gamemode = "spectator";
+      else if (raw.startsWith("cre")) state.gamemode = "creative";
+      else if (raw.startsWith("sur")) state.gamemode = "survival";
+    }
+    const time = urlParams.get("time");
+    if (time) {
+      const t = time.toLowerCase();
+      if (t === "day") setTimeOfDay(0.25);
+      if (t === "night") setTimeOfDay(0.75);
+      if (t === "dawn") setTimeOfDay(0);
+      if (t === "dusk") setTimeOfDay(0.5);
+    }
+    const hand = urlParams.get("hand");
+    if (hand === "torch") {
+      hotbar[0].id = "torch";
+      hotbar[0].count = 64;
+      hotbar[0].durability = null;
+      state.selectedHotbar = 0;
+    }
+    updateAllSlotsUI();
 
-  const ui = urlParams.get("ui");
-  if (ui === "inventory") openInventory();
-  if (ui === "crafting") openCraftingTable();
-  if (ui === "chat") openChat("/");
-  if (ui === "death") {
-    setTimeout(() => {
-      killPlayer();
-    }, 50);
-  }
-  if (urlParams.get("debugHud") === "1") {
-    state.debugHud = true;
+    const ui = urlParams.get("ui");
+    if (ui === "inventory") openInventory();
+    if (ui === "crafting") openCraftingTable();
+    if (ui === "chat") openChat("/");
+    if (ui === "death") {
+      setTimeout(() => {
+        killPlayer();
+      }, 50);
+    }
+    if (urlParams.get("debugHud") === "1") {
+      state.debugHud = true;
+    }
+
+    if (urlParams.get("perf") === "1") {
+      setTimeout(() => {
+        togglePerfOverlay();
+      }, 50);
+    }
   }
 
-  if (urlParams.get("perf") === "1") {
+  if (benchState.enabled) {
     setTimeout(() => {
-      togglePerfOverlay();
-    }, 50);
-  }
-
-  if (urlParams.get("bench") === "1") {
-    setTimeout(() => {
-      const target = {
-        x: spawn.x + 8.5,
-        y: Math.max(spawn.height + 2, SEA_LEVEL + 2),
-        z: spawn.z + 8.5,
-      };
-      teleportPlayer(target.x, target.y, target.z);
-      startBenchmark(30000, "bench");
+      prepareBenchStart();
+      startBenchScenario();
     }, 200);
   }
 };
@@ -284,19 +398,34 @@ const tick = (time) => {
     const now = time * 0.001;
     const dt = Math.min(0.033, now - state.lastTime || 0.016);
     state.lastTime = now;
+    if (benchState.enabled) {
+      updateBenchScenario(dt);
+    }
+    const worldStart = performance.now();
+    let uiMs = 0;
     if (state.mode === "playing") {
       advanceTime(dt);
       updateMobTarget(camera, state);
-      updateGame(dt);
+      const gameTimings = updateGame(dt);
+      uiMs = gameTimings?.uiMs ?? 0;
       updateMobs(dt);
     }
     updateItemEntities(dt, now, player, state.mode === "playing" && state.gamemode !== "spectator");
+    const worldMs = performance.now() - worldStart;
+    const uiStart = performance.now();
     updateChatDisplay();
+    uiMs += performance.now() - uiStart;
+    const renderStart = performance.now();
     render();
+    const renderMs = performance.now() - renderStart;
+    setPerfTimings({ renderMs, worldMs, uiMs });
     recordFrameTime(dt);
     updatePerfOverlay();
   } else {
+    const renderStart = performance.now();
     render();
+    const renderMs = performance.now() - renderStart;
+    setPerfTimings({ renderMs, worldMs: 0, uiMs: 0 });
   }
   requestAnimationFrame(tick);
 };

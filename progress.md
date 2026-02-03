@@ -109,3 +109,11 @@ Original prompt: Csinálj egy 3d játékot, wasd mozgas, nezes minden, minecraft
 - Screenshotok: output/web-game-texture6, output/web-game-texture7, output/web-game-texture8, output/grass-view4.
 - Világgenerálás: kevesebb kő a felszínen (rocky küszöb + magasság feljebb), fa csak grass/dirt tetejű blokkokon nő.
 - Playwright screenshot: output/web-game-rockfix/shot-0.png.
+- Víz logika bevezetve (js/water.js): idő-szeletelt, szint alapú terjedés lefelé és oldalra, forrás/áramlás nyomkövetés.
+- World integráció: víz szint tárolás chunkonként, setBlock víz eseményekkel, updateWorld víz tick.
+- Playwright screenshot: output/web-game-water/shot-0.png.
+- Perf overlay bővítve: draw calls, tris, geometries, chunk/queue counts, water queue, render/world/ui/mesh/water ms (js/perf.js, js/main.js, js/world.js, js/water.js).
+- Playwright futtatva: output/web-game-perf-overlay/shot-0.png.
+- Bench scenarios hozzáadva: `bench=1&scenario=A|B|C` (áll, auto‑sprint, place/break spam), fix seed bench módban, PERF_BENCH kibővített JSON (fps, frame time, timings, queuek).
+- PERF_REPORT.md sablon létrehozva a három scenárióhoz.
+- Playwright futtatás: WebGL hiba (three.js byteLength undefined) headless környezetben, a run megszakadt.

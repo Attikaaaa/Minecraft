@@ -20,6 +20,7 @@ const queueSize = (queue) => queue.items.length - queue.head;
 
 export const createWaterSystem = ({ getBlock, setBlock, getWaterLevel, setWaterLevel, isWithinWorld }) => {
   const queue = createQueue();
+  const getQueueSize = () => queueSize(queue);
 
   const enqueueAround = (x, y, z) => {
     enqueue(queue, { x, y, z });
@@ -117,5 +118,6 @@ export const createWaterSystem = ({ getBlock, setBlock, getWaterLevel, setWaterL
     enqueue: enqueueAround,
     update,
     onBlockChanged,
+    getQueueSize,
   };
 };
