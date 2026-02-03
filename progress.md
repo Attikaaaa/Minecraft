@@ -174,3 +174,10 @@ Teszt:
 - Teszt: kreatív mód + pitch fel, W mozgatás -> Y nem változott (state-before/after), tehát előre nem emel.
 - Teszt: /speed 2 + /flyspeed 3 parancsok render_game_to_text-ben érvényesültek.
 - Playwright: output/web-game-test-pause, output/web-game-test-movement.
+
+- Multiplayer upgrade: szerver oldali perzisztencia (saves/<room>.json), auto-save debounce.
+- Player data sync (hotbar/inventory/health/hunger/gamemode/respawnPoint) -> szerver tárolja, welcome-kor visszaadja.
+- Host-authoritative block updates: non-host block_update action a hosthoz, host broadcastolja.
+- TAB list UI (játékos lista Tab lenyomásra).
+- Chat /say és /me multiplayer sync.
+- Teszt futtatva: reports/multiplayer-2026-02-03T18-45-16-677Z/results.json (join, player sync, block sync, time, mob, item pickup, chat OK).
