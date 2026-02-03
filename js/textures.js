@@ -1,456 +1,283 @@
 import * as THREE from "https://unpkg.com/three@0.161.0/build/three.module.js";
-import { clamp, hexToRgb, pickFromPalette, pixelNoise, randomSeed } from "./config.js";
 import { hash3 } from "./noise.js";
 
-const makePixelTexture = ({
-  palette,
-  weights,
-  seedOffset,
-  cellSize = 4,
-  jitter = 10,
-  speckleChance = 0,
-  speckleColor = null,
-  alphaChance = 0,
-  alphaValue = 200,
-  overlay = null,
-}) => {
-  const size = 16;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d");
-  const image = ctx.createImageData(size, size);
-
-  for (let y = 0; y < size; y += 1) {
-    for (let x = 0; x < size; x += 1) {
-      const cellX = Math.floor(x / cellSize);
-      const cellY = Math.floor(y / cellSize);
-      const cellNoise = pixelNoise(cellX, cellY, seedOffset * 0.77);
-      const baseHex = pickFromPalette(palette, weights, cellNoise);
-      let { r, g, b } = hexToRgb(baseHex);
-
-      const fine = pixelNoise(x, y, seedOffset * 1.37);
-      const shade = (fine - 0.5) * 2 * jitter;
-      r += shade;
-      g += shade;
-      b += shade;
-
-      if (speckleChance > 0) {
-        const s = pixelNoise(x * 1.7, y * 1.7, seedOffset * 2.13);
-        if (s < speckleChance && speckleColor) {
-          const speckle = hexToRgb(speckleColor);
-          r = speckle.r;
-          g = speckle.g;
-          b = speckle.b;
-        }
+// Textúra betöltése fájlból Promise-szal
+const loadTextureFromFile = (path) => {
+  return new Promise((resolve) => {
+    const texture = new THREE.TextureLoader().load(
+      path,
+      () => resolve(texture),
+      undefined,
+      (err) => {
+        console.warn(`Textúra nem található: ${path}, fallback használata`);
+        const fallback = new THREE.Texture();
+        fallback.image = document.createElement('canvas');
+        fallback.image.width = 16;
+        fallback.image.height = 16;
+        const ctx = fallback.image.getContext('2d');
+        ctx.fillStyle = '#ff00ff';
+        ctx.fillRect(0, 0, 16, 16);
+        fallback.needsUpdate = true;
+        fallback.magFilter = THREE.NearestFilter;
+        fallback.minFilter = THREE.NearestFilter;
+        fallback.generateMipmaps = false;
+        fallback.colorSpace = THREE.SRGBColorSpace;
+        fallback.wrapS = THREE.RepeatWrapping;
+        fallback.wrapT = THREE.RepeatWrapping;
+        fallback.flipY = false;
+        resolve(fallback);
       }
-
-      if (overlay) {
-        const adjusted = overlay(x, y, { r, g, b });
-        r = adjusted.r;
-        g = adjusted.g;
-        b = adjusted.b;
-      }
-
-      let alpha = 255;
-      if (alphaChance > 0) {
-        const a = pixelNoise(x * 2.3, y * 2.3, seedOffset * 3.1);
-        if (a < alphaChance) alpha = alphaValue;
-      }
-
-      const idx = (y * size + x) * 4;
-      image.data[idx] = clamp(Math.round(r), 0, 255);
-      image.data[idx + 1] = clamp(Math.round(g), 0, 255);
-      image.data[idx + 2] = clamp(Math.round(b), 0, 255);
-      image.data[idx + 3] = alpha;
-    }
-  }
-
-  ctx.putImageData(image, 0, 0);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.magFilter = THREE.NearestFilter;
-  texture.minFilter = THREE.NearestFilter;
-  texture.generateMipmaps = false;
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.userData = texture.userData || {};
-  texture.userData.sourceCanvas = canvas;
-  return texture;
+    );
+    texture.magFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.NearestFilter;
+    texture.generateMipmaps = false;
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.flipY = false; // Minecraft textúrákhoz false kell!
+  });
 };
-
-const makeGrassSideTexture = (grassPalette, dirtPalette, seedOffset) =>
-  makePixelTexture({
-    palette: dirtPalette,
-    weights: [4, 3, 2],
-    seedOffset,
-    cellSize: 4,
-    jitter: 10,
-    speckleChance: 0.05,
-    speckleColor: 0x5a472f,
-    overlay: (x, y, color) => {
-      if (y < 4) {
-        const cellNoise = pixelNoise(x, y, seedOffset * 1.11);
-        const topHex = pickFromPalette(grassPalette, [4, 3, 2], cellNoise);
-        const top = hexToRgb(topHex);
-        return { r: top.r, g: top.g, b: top.b };
-      }
-      return color;
-    },
-  });
-
-const makeWoodTexture = (palette, seedOffset) =>
-  makePixelTexture({
-    palette,
-    weights: [3, 2, 1],
-    seedOffset,
-    cellSize: 3,
-    jitter: 12,
-    overlay: (x, y, color) => {
-      const stripe = x % 4 === 0 ? -22 : x % 4 === 1 ? -12 : 0;
-      return { r: color.r + stripe, g: color.g + stripe, b: color.b + stripe };
-    },
-  });
 
 const makeMat = (texture, opts = {}) =>
   new THREE.MeshLambertMaterial({ map: texture, ...opts });
 
-const grassPalettes = [
-  [0x6fcf55, 0x5fb94c, 0x7dde65],
-  [0x67c84f, 0x5ab348, 0x75d85d],
-  [0x74d95d, 0x62c24c, 0x5bb345],
-];
-const dirtPalettes = [
-  [0x8b6c42, 0x7c5f3a, 0x936f46],
-  [0x845f39, 0x734f31, 0x8f6841],
-  [0x8f6a43, 0x7e5b38, 0x9b744a],
-];
-const stonePalettes = [
-  [0x8a8f98, 0x7c8088, 0x9aa1ac],
-  [0x878c95, 0x7a7f87, 0x9da4ae],
-  [0x838790, 0x777b83, 0x949aa4],
-];
-const woodPalettes = [
-  [0x9c6b3f, 0x8b5f37, 0xa97545],
-  [0x946339, 0x845634, 0xa56f43],
-  [0x9f6f43, 0x8c6139, 0xac7848],
-];
-const leavesPalettes = [
-  [0x3f7f3a, 0x357033, 0x4c8d45],
-  [0x417f3c, 0x376f34, 0x4f8f47],
-  [0x3b7536, 0x346a31, 0x468241],
-];
-const sandPalettes = [
-  [0xdac58a, 0xd0b97f, 0xe1cc95],
-  [0xd6c087, 0xcbb37a, 0xe0cb94],
-  [0xdec991, 0xd2bc84, 0xe7d19b],
-];
-const coalPalettes = [
-  [0x4a4f55, 0x41454a, 0x525960],
-  [0x474b51, 0x3c4046, 0x51575f],
-  [0x4e5359, 0x42464d, 0x585f68],
-];
+// Textúrák
+let texturesLoaded = false;
+let textures = {};
 
-const grassMaterials = grassPalettes.map((palette, idx) => {
-  const topTex = makePixelTexture({
-    palette,
-    weights: [4, 3, 2],
-    seedOffset: randomSeed + idx * 9.1,
-    cellSize: 3,
-    jitter: 10,
-    speckleChance: 0.03,
-    speckleColor: 0x3f7f2f,
-  });
-  const sideTex = makeGrassSideTexture(palette, dirtPalettes[idx % dirtPalettes.length], randomSeed + idx * 10.3);
-  const bottomTex = makePixelTexture({
-    palette: dirtPalettes[idx % dirtPalettes.length],
-    weights: [4, 3, 2],
-    seedOffset: randomSeed + idx * 8.4,
-    cellSize: 4,
-    jitter: 8,
-    speckleChance: 0.06,
-    speckleColor: 0x5a472f,
-  });
-  return [
-    makeMat(sideTex),
-    makeMat(sideTex),
-    makeMat(topTex),
-    makeMat(bottomTex),
-    makeMat(sideTex),
-    makeMat(sideTex),
-  ];
-});
+export const loadAllTextures = async () => {
+  if (texturesLoaded) return;
+  
+  console.log("Textúrák betöltése...");
+  
+  const textureList = await Promise.all([
+    loadTextureFromFile('textures/grass_block_top.png'),
+    loadTextureFromFile('textures/grass_block_side.png', true),
+    loadTextureFromFile('textures/dirt.png'),
+    loadTextureFromFile('textures/stone.png'),
+    loadTextureFromFile('textures/oak_log.png'),
+    loadTextureFromFile('textures/oak_log_top.png'),
+    loadTextureFromFile('textures/oak_leaves.png'),
+    loadTextureFromFile('textures/sand.png'),
+    loadTextureFromFile('textures/coal_ore.png'),
+    loadTextureFromFile('textures/cobblestone.png'),
+    loadTextureFromFile('textures/oak_planks.png'),
+    loadTextureFromFile('textures/water_still.png'),
+    loadTextureFromFile('textures/crafting_table_top.png'),
+    loadTextureFromFile('textures/crafting_table_side.png'),
+    loadTextureFromFile('textures/crafting_table_front.png'),
+    loadTextureFromFile('textures/iron_ore.png'),
+    loadTextureFromFile('textures/gold_ore.png'),
+    loadTextureFromFile('textures/diamond_ore.png'),
+    loadTextureFromFile('textures/redstone_ore.png'),
+    loadTextureFromFile('textures/lapis_ore.png'),
+    loadTextureFromFile('textures/emerald_ore.png'),
+    loadTextureFromFile('textures/torch.png'),
+    loadTextureFromFile('textures/block/bedrock.png'),
+  ]);
+  
+  textures = {
+    grassTop: textureList[0],
+    grassSide: textureList[1],
+    dirt: textureList[2],
+    stone: textureList[3],
+    oakLogSide: textureList[4],
+    oakLogTop: textureList[5],
+    oakLeaves: textureList[6],
+    sand: textureList[7],
+    coalOre: textureList[8],
+    cobblestone: textureList[9],
+    oakPlanks: textureList[10],
+    water: textureList[11],
+    craftingTableTop: textureList[12],
+    craftingTableSide: textureList[13],
+    craftingTableFront: textureList[14],
+    ironOre: textureList[15],
+    goldOre: textureList[16],
+    diamondOre: textureList[17],
+    redstoneOre: textureList[18],
+    lapisOre: textureList[19],
+    emeraldOre: textureList[20],
+    torch: textureList[21],
+    bedrock: textureList[22],
+  };
+  
+  texturesLoaded = true;
+  console.log("Textúrák betöltve!");
+};
 
-const dirtMaterials = dirtPalettes.map((palette, idx) =>
-  makeMat(
-    makePixelTexture({
-      palette,
-      weights: [4, 3, 2],
-      seedOffset: randomSeed + idx * 7.7,
-      cellSize: 4,
-      jitter: 8,
-      speckleChance: 0.08,
-      speckleColor: 0x5a472f,
-    })
-  )
-);
-const stoneMaterials = stonePalettes.map((palette, idx) =>
-  makeMat(
-    makePixelTexture({
-      palette,
-      weights: [3, 3, 2],
-      seedOffset: randomSeed + idx * 6.5,
-      cellSize: 4,
-      jitter: 12,
-      speckleChance: 0.08,
-      speckleColor: 0x6f737a,
-    })
-  )
-);
-const woodMaterials = woodPalettes.map((palette, idx) =>
-  makeMat(makeWoodTexture(palette, randomSeed + idx * 5.3))
-);
-const leavesMaterials = leavesPalettes.map((palette, idx) =>
-  makeMat(
-    makePixelTexture({
-      palette,
-      weights: [3, 3, 2],
-      seedOffset: randomSeed + idx * 4.9,
-      cellSize: 3,
-      jitter: 8,
-      speckleChance: 0.06,
-      speckleColor: 0x2f5e2b,
-      alphaChance: 0.12,
-      alphaValue: 200,
-    }),
-    {
-      transparent: true,
-      opacity: 0.95,
-    }
-  )
-);
-const sandMaterials = sandPalettes.map((palette, idx) =>
-  makeMat(
-    makePixelTexture({
-      palette,
-      weights: [4, 3, 2],
-      seedOffset: randomSeed + idx * 7.1,
-      cellSize: 4,
-      jitter: 6,
-      speckleChance: 0.04,
-      speckleColor: 0xc7b078,
-    })
-  )
-);
-const coalMaterials = coalPalettes.map((palette, idx) =>
-  makeMat(
-    makePixelTexture({
-      palette,
-      weights: [3, 3, 2],
-      seedOffset: randomSeed + idx * 6.9,
-      cellSize: 3,
-      jitter: 10,
-      speckleChance: 0.2,
-      speckleColor: 0x8b929a,
-    })
-  )
-);
-const cobbleMaterials = stonePalettes.map((palette, idx) =>
-  makeMat(
-    makePixelTexture({
-      palette,
-      weights: [3, 3, 2],
-      seedOffset: randomSeed + idx * 8.6,
-      cellSize: 3,
-      jitter: 14,
-      speckleChance: 0.25,
-      speckleColor: 0x6b7077,
-    })
-  )
-);
-
-const makeOreMaterials = (oreColor, seedOffset) =>
-  stonePalettes.map((palette, idx) =>
-    makeMat(
-      makePixelTexture({
-        palette,
-        weights: [3, 3, 2],
-        seedOffset: randomSeed + seedOffset + idx * 5.4,
-        cellSize: 3,
-        jitter: 12,
-        speckleChance: 0.18,
-        speckleColor: oreColor,
-        overlay: (x, y, color) => {
-          const n = pixelNoise(x * 1.7, y * 1.7, seedOffset + idx * 2.1);
-          if (n < 0.12) {
-            const ore = hexToRgb(oreColor);
-            return { r: ore.r, g: ore.g, b: ore.b };
-          }
-          return color;
-        },
-      })
-    )
-  );
-
-const ironOreMaterials = makeOreMaterials(0xd8a066, 71.1);
-const goldOreMaterials = makeOreMaterials(0xf2d36b, 82.5);
-const diamondOreMaterials = makeOreMaterials(0x6fe7e7, 93.8);
-const redstoneOreMaterials = makeOreMaterials(0xd94b3d, 104.2);
-const lapisOreMaterials = makeOreMaterials(0x3b6bd6, 115.7);
-const emeraldOreMaterials = makeOreMaterials(0x36c96f, 127.9);
-const waterMaterial = makeMat(
-  makePixelTexture({
-    palette: [0x3c7bd6, 0x356fc2, 0x4a8be6],
-    weights: [4, 3, 2],
-    seedOffset: randomSeed * 0.73,
-    cellSize: 3,
-    jitter: 6,
-  }),
-  {
-    transparent: true,
-    opacity: 0.7,
+export const getBlockMaterials = () => {
+  if (!texturesLoaded) {
+    throw new Error("Textúrák még nem töltődtek be!");
   }
-);
-
-const plankMaterials = woodPalettes.map((palette, idx) =>
-  makeMat(
-    makePixelTexture({
-      palette,
-      weights: [3, 2, 1],
-      seedOffset: randomSeed + idx * 9.4,
-      cellSize: 4,
-      jitter: 8,
-      overlay: (x, y, color) => {
-        const stripe = y % 4 === 0 ? -22 : y % 4 === 1 ? -12 : 0;
-        return { r: color.r + stripe, g: color.g + stripe, b: color.b + stripe };
-      },
-    })
-  )
-);
-
-const craftingTopTex = makePixelTexture({
-  palette: [0xb7895b, 0xa9784e, 0x9a6a42],
-  weights: [3, 3, 2],
-  seedOffset: randomSeed + 44.7,
-  cellSize: 3,
-  jitter: 8,
-  overlay: (x, y, color) => {
-    if (x === 0 || y === 0 || x === 15 || y === 15) {
-      return { r: color.r - 28, g: color.g - 28, b: color.b - 28 };
-    }
-    if (x === 7 || y === 7) {
-      return { r: color.r - 20, g: color.g - 20, b: color.b - 20 };
-    }
-    return color;
-  },
-});
-const craftingSideTex = makePixelTexture({
-  palette: [0xa16c3f, 0x8f5f37, 0xb37b4d],
-  weights: [3, 3, 2],
-  seedOffset: randomSeed + 52.9,
-  cellSize: 3,
-  jitter: 10,
-  overlay: (x, y, color) => {
-    if (x === 0 || x === 15) {
-      return { r: color.r - 20, g: color.g - 20, b: color.b - 20 };
-    }
-    if (y > 9 && x > 4 && x < 11) {
-      return { r: color.r - 30, g: color.g - 30, b: color.b - 30 };
-    }
-    return color;
-  },
-});
-const craftingBottomTex = makePixelTexture({
-  palette: [0x845634, 0x744b2e, 0x93613a],
-  weights: [3, 2, 1],
-  seedOffset: randomSeed + 61.3,
-  cellSize: 4,
-  jitter: 6,
-});
-
-const craftingTableMaterials = [
-  [
-    makeMat(craftingSideTex),
-    makeMat(craftingSideTex),
-    makeMat(craftingTopTex),
-    makeMat(craftingBottomTex),
-    makeMat(craftingSideTex),
-    makeMat(craftingSideTex),
-  ],
-];
-
-const torchSeed = randomSeed + 77.7;
-const torchTexture = makePixelTexture({
-  palette: [0x8b5a2b, 0x6f4320, 0xa36a32],
-  weights: [3, 2, 1],
-  seedOffset: torchSeed,
-  cellSize: 4,
-  jitter: 8,
-  overlay: (x, y, color) => {
-    if (y < 5) {
-      const flicker = pixelNoise(x * 2.1, y * 2.1, torchSeed) - 0.5;
-      return {
-        r: 240 + flicker * 20,
-        g: 190 + flicker * 15,
-        b: 90 + flicker * 10,
-      };
-    }
-    if (x > 6 && x < 10) {
-      return {
-        r: color.r + 18,
-        g: color.g + 10,
-        b: color.b + 4,
-      };
-    }
-    return color;
-  },
-});
-const torchMaterial = makeMat(torchTexture);
+  
+  const t = textures;
+  
+  // Three.js material sorrend: [+X(jobb), -X(bal), +Y(felső), -Y(alsó), +Z(elülső), -Z(hátsó)]
+  
+  return {
+    grassMaterials: [[
+      makeMat(t.grassSide), makeMat(t.grassSide), makeMat(t.grassTop),
+      makeMat(t.dirt), makeMat(t.grassSide), makeMat(t.grassSide)
+    ]],
+    dirtMaterials: [[
+      makeMat(t.dirt), makeMat(t.dirt), makeMat(t.dirt),
+      makeMat(t.dirt), makeMat(t.dirt), makeMat(t.dirt)
+    ]],
+    stoneMaterials: [[
+      makeMat(t.stone), makeMat(t.stone), makeMat(t.stone),
+      makeMat(t.stone), makeMat(t.stone), makeMat(t.stone)
+    ]],
+    woodMaterials: [[
+      makeMat(t.oakLogSide), makeMat(t.oakLogSide), makeMat(t.oakLogTop),
+      makeMat(t.oakLogTop), makeMat(t.oakLogSide), makeMat(t.oakLogSide)
+    ]],
+    leavesMaterials: [[
+      makeMat(t.oakLeaves, { transparent: true, alphaTest: 0.5 }),
+      makeMat(t.oakLeaves, { transparent: true, alphaTest: 0.5 }),
+      makeMat(t.oakLeaves, { transparent: true, alphaTest: 0.5 }),
+      makeMat(t.oakLeaves, { transparent: true, alphaTest: 0.5 }),
+      makeMat(t.oakLeaves, { transparent: true, alphaTest: 0.5 }),
+      makeMat(t.oakLeaves, { transparent: true, alphaTest: 0.5 })
+    ]],
+    sandMaterials: [[
+      makeMat(t.sand), makeMat(t.sand), makeMat(t.sand),
+      makeMat(t.sand), makeMat(t.sand), makeMat(t.sand)
+    ]],
+    coalMaterials: [[
+      makeMat(t.coalOre), makeMat(t.coalOre), makeMat(t.coalOre),
+      makeMat(t.coalOre), makeMat(t.coalOre), makeMat(t.coalOre)
+    ]],
+    cobbleMaterials: [[
+      makeMat(t.cobblestone), makeMat(t.cobblestone), makeMat(t.cobblestone),
+      makeMat(t.cobblestone), makeMat(t.cobblestone), makeMat(t.cobblestone)
+    ]],
+    bedrockMaterials: [[
+      makeMat(t.bedrock), makeMat(t.bedrock), makeMat(t.bedrock),
+      makeMat(t.bedrock), makeMat(t.bedrock), makeMat(t.bedrock)
+    ]],
+    plankMaterials: [[
+      makeMat(t.oakPlanks), makeMat(t.oakPlanks), makeMat(t.oakPlanks),
+      makeMat(t.oakPlanks), makeMat(t.oakPlanks), makeMat(t.oakPlanks)
+    ]],
+    waterMaterial: [
+      makeMat(t.water, { transparent: true, opacity: 0.7 }),
+      makeMat(t.water, { transparent: true, opacity: 0.7 }),
+      makeMat(t.water, { transparent: true, opacity: 0.7 }),
+      makeMat(t.water, { transparent: true, opacity: 0.7 }),
+      makeMat(t.water, { transparent: true, opacity: 0.7 }),
+      makeMat(t.water, { transparent: true, opacity: 0.7 })
+    ],
+    ironOreMaterials: [[
+      makeMat(t.ironOre), makeMat(t.ironOre), makeMat(t.ironOre),
+      makeMat(t.ironOre), makeMat(t.ironOre), makeMat(t.ironOre)
+    ]],
+    goldOreMaterials: [[
+      makeMat(t.goldOre), makeMat(t.goldOre), makeMat(t.goldOre),
+      makeMat(t.goldOre), makeMat(t.goldOre), makeMat(t.goldOre)
+    ]],
+    diamondOreMaterials: [[
+      makeMat(t.diamondOre), makeMat(t.diamondOre), makeMat(t.diamondOre),
+      makeMat(t.diamondOre), makeMat(t.diamondOre), makeMat(t.diamondOre)
+    ]],
+    redstoneOreMaterials: [[
+      makeMat(t.redstoneOre), makeMat(t.redstoneOre), makeMat(t.redstoneOre),
+      makeMat(t.redstoneOre), makeMat(t.redstoneOre), makeMat(t.redstoneOre)
+    ]],
+    lapisOreMaterials: [[
+      makeMat(t.lapisOre), makeMat(t.lapisOre), makeMat(t.lapisOre),
+      makeMat(t.lapisOre), makeMat(t.lapisOre), makeMat(t.lapisOre)
+    ]],
+    emeraldOreMaterials: [[
+      makeMat(t.emeraldOre), makeMat(t.emeraldOre), makeMat(t.emeraldOre),
+      makeMat(t.emeraldOre), makeMat(t.emeraldOre), makeMat(t.emeraldOre)
+    ]],
+    craftingTableMaterials: [[
+      makeMat(t.craftingTableSide), makeMat(t.craftingTableSide), makeMat(t.craftingTableTop),
+      makeMat(t.oakPlanks), makeMat(t.craftingTableFront), makeMat(t.craftingTableSide)
+    ]],
+    torchMaterial: [
+      makeMat(t.torch), makeMat(t.torch), makeMat(t.torch),
+      makeMat(t.torch), makeMat(t.torch), makeMat(t.torch)
+    ],
+  };
+};
 
 export const blockDefs = {
-  1: { name: "Fű", solid: true, renderGroup: "opaque", variants: grassMaterials },
-  2: { name: "Föld", solid: true, renderGroup: "opaque", variants: dirtMaterials },
-  3: { name: "Kő", solid: true, renderGroup: "opaque", variants: stoneMaterials },
-  4: { name: "Fa", solid: true, renderGroup: "opaque", variants: woodMaterials, mapFace: "side" },
-  5: { name: "Lomb", solid: true, renderGroup: "cutout", variants: leavesMaterials, mapFace: "side" },
-  6: { name: "Homok", solid: true, renderGroup: "opaque", variants: sandMaterials },
-  7: { name: "Szénérc", solid: true, renderGroup: "opaque", variants: coalMaterials, mapFace: "side" },
-  8: { name: "Víz", solid: false, renderGroup: "water", variants: [waterMaterial] },
-  9: { name: "Munkapad", solid: true, renderGroup: "opaque", variants: craftingTableMaterials },
-  10: { name: "Deszka", solid: true, renderGroup: "opaque", variants: plankMaterials, mapFace: "top" },
-  11: { name: "Kockakő", solid: true, renderGroup: "opaque", variants: cobbleMaterials, mapFace: "side" },
-  12: { name: "Vasérc", solid: true, renderGroup: "opaque", variants: ironOreMaterials, mapFace: "side" },
-  13: { name: "Aranyérc", solid: true, renderGroup: "opaque", variants: goldOreMaterials, mapFace: "side" },
-  14: { name: "Gyémántérc", solid: true, renderGroup: "opaque", variants: diamondOreMaterials, mapFace: "side" },
-  15: { name: "Redstone ér", solid: true, renderGroup: "opaque", variants: redstoneOreMaterials, mapFace: "side" },
-  16: { name: "Lapis ér", solid: true, renderGroup: "opaque", variants: lapisOreMaterials, mapFace: "side" },
-  17: { name: "Smaragdérc", solid: true, renderGroup: "opaque", variants: emeraldOreMaterials, mapFace: "side" },
-  18: { name: "Fáklya", solid: false, renderGroup: "cutout", variants: [torchMaterial], mapFace: "side" },
+  1: { name: "Fű", solid: true, renderGroup: "opaque", getMaterials: () => getBlockMaterials().grassMaterials },
+  2: { name: "Föld", solid: true, renderGroup: "opaque", getMaterials: () => getBlockMaterials().dirtMaterials },
+  3: { name: "Kő", solid: true, renderGroup: "opaque", getMaterials: () => getBlockMaterials().stoneMaterials },
+  4: { name: "Fa", solid: true, renderGroup: "opaque", getMaterials: () => getBlockMaterials().woodMaterials, mapFace: "side" },
+  5: { name: "Lomb", solid: true, renderGroup: "cutout", getMaterials: () => getBlockMaterials().leavesMaterials, mapFace: "side" },
+  6: { name: "Homok", solid: true, renderGroup: "opaque", getMaterials: () => getBlockMaterials().sandMaterials },
+  7: { name: "Szénérc", solid: true, renderGroup: "opaque", getMaterials: () => getBlockMaterials().coalMaterials, mapFace: "side" },
+  8: { name: "Víz", solid: false, renderGroup: "water", getMaterials: () => [getBlockMaterials().waterMaterial] },
+  9: { name: "Munkapad", solid: true, renderGroup: "opaque", getMaterials: () => getBlockMaterials().craftingTableMaterials },
+  10: { name: "Deszka", solid: true, renderGroup: "opaque", getMaterials: () => getBlockMaterials().plankMaterials, mapFace: "top" },
+  11: { name: "Kockakő", solid: true, renderGroup: "opaque", getMaterials: () => getBlockMaterials().cobbleMaterials, mapFace: "side" },
+  12: { name: "Vasérc", solid: true, renderGroup: "opaque", getMaterials: () => getBlockMaterials().ironOreMaterials, mapFace: "side" },
+  13: { name: "Aranyérc", solid: true, renderGroup: "opaque", getMaterials: () => getBlockMaterials().goldOreMaterials, mapFace: "side" },
+  14: { name: "Gyémántérc", solid: true, renderGroup: "opaque", getMaterials: () => getBlockMaterials().diamondOreMaterials, mapFace: "side" },
+  15: { name: "Redstone ér", solid: true, renderGroup: "opaque", getMaterials: () => getBlockMaterials().redstoneOreMaterials, mapFace: "side" },
+  16: { name: "Lapis ér", solid: true, renderGroup: "opaque", getMaterials: () => getBlockMaterials().lapisOreMaterials, mapFace: "side" },
+  17: { name: "Smaragdérc", solid: true, renderGroup: "opaque", getMaterials: () => getBlockMaterials().emeraldOreMaterials, mapFace: "side" },
+  18: { 
+    name: "Fáklya", 
+    solid: false, 
+    renderGroup: "cutout", 
+    getMaterials: () => [getBlockMaterials().torchMaterial], 
+    mapFace: "side",
+    isAttachable: true,
+    needsSupport: true,
+  },
+  19: { name: "Bedrock", solid: true, renderGroup: "opaque", getMaterials: () => getBlockMaterials().bedrockMaterials },
 };
 
 const textureToIcon = (source) => {
   const texture = source?.isTexture ? source : source?.map;
-  const canvas = texture?.userData?.sourceCanvas;
-  return canvas ? canvas.toDataURL() : null;
+  if (!texture) return null;
+  const sourceCanvas = texture.userData?.sourceCanvas;
+  if (sourceCanvas) return sourceCanvas.toDataURL();
+  const image = texture.image;
+  if (!image) return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = 16;
+  canvas.height = 16;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(image, 0, 0, 16, 16);
+  return canvas.toDataURL();
 };
 
-export const blockIcons = {
-  1: textureToIcon(grassMaterials[0][2]),
-  2: textureToIcon(dirtMaterials[0]),
-  3: textureToIcon(stoneMaterials[0]),
-  4: textureToIcon(woodMaterials[0]),
-  5: textureToIcon(leavesMaterials[0]),
-  6: textureToIcon(sandMaterials[0]),
-  7: textureToIcon(coalMaterials[0]),
-  8: textureToIcon(waterMaterial),
-  9: textureToIcon(craftingTopTex),
-  10: textureToIcon(plankMaterials[0]),
-  11: textureToIcon(cobbleMaterials[0]),
-  12: textureToIcon(ironOreMaterials[0]),
-  13: textureToIcon(goldOreMaterials[0]),
-  14: textureToIcon(diamondOreMaterials[0]),
-  15: textureToIcon(redstoneOreMaterials[0]),
-  16: textureToIcon(lapisOreMaterials[0]),
-  17: textureToIcon(emeraldOreMaterials[0]),
-  18: textureToIcon(torchMaterial),
+export const getBlockIcons = () => {
+  const mats = getBlockMaterials();
+  return {
+    1: textureToIcon(mats.grassMaterials[0][2]),
+    2: textureToIcon(mats.dirtMaterials[0][0]),
+    3: textureToIcon(mats.stoneMaterials[0][0]),
+    4: textureToIcon(mats.woodMaterials[0][2]),
+    5: textureToIcon(mats.leavesMaterials[0][0]),
+    6: textureToIcon(mats.sandMaterials[0][0]),
+    7: textureToIcon(mats.coalMaterials[0][0]),
+    8: textureToIcon(mats.waterMaterial[0]),
+    9: textureToIcon(mats.craftingTableMaterials[0][2]),
+    10: textureToIcon(mats.plankMaterials[0][0]),
+    11: textureToIcon(mats.cobbleMaterials[0][0]),
+    12: textureToIcon(mats.ironOreMaterials[0][0]),
+    13: textureToIcon(mats.goldOreMaterials[0][0]),
+    14: textureToIcon(mats.diamondOreMaterials[0][0]),
+    15: textureToIcon(mats.redstoneOreMaterials[0][0]),
+    16: textureToIcon(mats.lapisOreMaterials[0][0]),
+    17: textureToIcon(mats.emeraldOreMaterials[0][0]),
+    18: textureToIcon(mats.torchMaterial[0]),
+    19: textureToIcon(mats.bedrockMaterials[0][0]),
+  };
+};
+
+export const blockIcons = {};
+
+export const refreshBlockIcons = () => {
+  Object.assign(blockIcons, getBlockIcons());
+  return blockIcons;
 };
 
 export const makeIconCanvas = (drawFn) => {
@@ -530,5 +357,6 @@ const pickVariant = (variants, x, y, z) => {
 export const getBlockMaterial = (type, x, y, z) => {
   const def = blockDefs[type];
   if (!def) return null;
-  return pickVariant(def.variants, x, y, z);
+  const variants = def.getMaterials ? def.getMaterials() : (def.variants || []);
+  return pickVariant(variants, x, y, z);
 };

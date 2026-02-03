@@ -142,6 +142,10 @@ const finishBenchmark = () => {
       ui: Number(timingAverages.ui.toFixed(3)),
     },
   };
+  if (typeof window !== "undefined") {
+    window.__perfBench = payload;
+    window.__perfBenchHistory = [...(window.__perfBenchHistory || []), payload];
+  }
   console.log("PERF_BENCH", JSON.stringify(payload));
 };
 

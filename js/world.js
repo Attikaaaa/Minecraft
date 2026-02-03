@@ -1,6 +1,6 @@
 import { THREE, scene } from "./scene.js";
 import { CHUNK_RADIUS, CHUNK_SIZE, SEA_LEVEL, WORLD_MAX_HEIGHT, clamp, randomSeed, urlParams } from "./config.js";
-import { noise2D, noise3D, hash2, smoothstep } from "./noise.js";
+import { noise2D, noise3D, hash2, hash3, smoothstep } from "./noise.js";
 import { blockDefs } from "./textures.js";
 import { atlasMaterials, blockFaceTiles, blockRenderGroups, blockMapFaces } from "./atlas.js";
 import { buildChunkMeshBuffers } from "./mesher.js";
@@ -181,8 +181,8 @@ const getTerrainInfo = (x, z) => {
   const detail = toSigned(noise2D(wx * 0.12, wz * 0.12));
   const mountainMask = noise2D(wx * 0.006 + 133.7, wz * 0.006 + 91.9);
 
-  let height = 10 + continent * 4 + hills * 4.2 + detail * 1.8;
-  const mountain = Math.max(0, mountainMask - 0.65) * 18;
+  let height = 18 + continent * 8 + hills * 6.5 + detail * 2.5;
+  const mountain = Math.max(0, mountainMask - 0.65) * 24;
   height += mountain;
 
   const riverValue = Math.abs(toSigned(noise2D(wx * 0.015 + 221.4, wz * 0.015 - 91.2)));
@@ -197,7 +197,7 @@ const getTerrainInfo = (x, z) => {
     height = Math.min(height, SEA_LEVEL - 1);
   }
 
-  height = Math.max(3, Math.min(WORLD_MAX_HEIGHT - 4, Math.floor(height)));
+  height = Math.max(6, Math.min(WORLD_MAX_HEIGHT - 4, Math.floor(height)));
 
   const moisture = noise2D(wx * 0.01 + 500.7, wz * 0.01 - 200.4);
   const temperature = noise2D(wx * 0.01 - 412.1, wz * 0.01 + 312.9);
@@ -299,6 +299,13 @@ const generateChunk = (chunk) => {
 
       for (let y = 0; y < height; y += 1) {
         let type = 3;
+        if (y <= 3) {
+          const chance = y === 0 ? 1 : 0.7 - y * 0.2;
+          if (hash3(worldX, y, worldZ) < chance) {
+            setGeneratedBlock(worldX, y, worldZ, 19);
+            continue;
+          }
+        }
         if (y >= height - 1) type = topType;
         else if (y >= height - 3) type = fillerType;
 
@@ -482,9 +489,9 @@ const meshQueue = createQueue();
 const meshApplyQueue = createQueue();
 const meshJobs = new Map();
 let meshWorker = null;
-let meshWorkerAvailable = typeof Worker !== "undefined";
-const meshWorkerDisabled =
-  urlParams.get("mesher")?.toLowerCase() === "main" || urlParams.get("meshworker") === "0";
+let meshWorkerAvailable =
+  typeof Worker !== "undefined" && urlParams.get("meshworker") === "1";
+const meshWorkerDisabled = urlParams.get("mesher")?.toLowerCase() === "main";
 if (meshWorkerDisabled) meshWorkerAvailable = false;
 let meshJobId = 1;
 const worldTimings = {
@@ -536,6 +543,10 @@ const initMeshWorker = () => {
   meshWorker.onmessage = (event) => {
     const payload = event.data;
     if (!payload || payload.type !== "meshResult") return;
+    if (!payload.buffers) {
+      console.error("Mesh worker returned empty buffers", payload);
+      return;
+    }
     enqueue(meshApplyQueue, payload);
   };
   meshWorker.onerror = (err) => {
@@ -694,6 +705,8 @@ export const updateWorld = () => {
 
 let waterSystem = null;
 
+import { checkNeighborFalling } from "./physics.js";
+
 export const setBlock = (x, y, z, type, options = {}) => {
   if (!isWithinWorld(x, y, z)) return false;
   const { cx, cz, lx, lz } = worldToChunk(x, z);
@@ -711,6 +724,12 @@ export const setBlock = (x, y, z, type, options = {}) => {
   if (!options.skipWater && waterSystem) {
     waterSystem.onBlockChanged(x, y, z, prev, type);
   }
+  
+  // Falling block fizika (Minecraft mechanika)
+  if (!options.skipPhysics) {
+    checkNeighborFalling(x, y, z);
+  }
+  
   return true;
 };
 

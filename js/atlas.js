@@ -1,5 +1,5 @@
 import { THREE } from "./scene.js";
-import { blockDefs } from "./textures.js";
+import { blockDefs, loadAllTextures } from "./textures.js";
 import { hash3 } from "./noise.js";
 
 const TILE_SIZE = 16;
@@ -35,24 +35,34 @@ const registerTexture = (materialOrTexture) => {
   return tileIndex;
 };
 
-const blockFaceTiles = {};
-const blockRenderGroups = {};
-const blockMapFaces = {};
+let blockFaceTiles = {};
+let blockRenderGroups = {};
+let blockMapFaces = {};
+let atlas = null;
 
-for (const [rawType, def] of Object.entries(blockDefs)) {
-  const type = Number(rawType);
-  const variants = def.variants || [];
-  const variantTiles = variants.map((variant) => {
-    if (Array.isArray(variant)) {
-      return variant.map((mat) => registerTexture(mat));
-    }
-    const tile = registerTexture(variant);
-    return [tile, tile, tile, tile, tile, tile];
-  });
-  blockFaceTiles[type] = variantTiles;
-  blockRenderGroups[type] = def.renderGroup || (def.solid === false ? "cutout" : "opaque");
-  blockMapFaces[type] = def.mapFace || null;
-}
+const initializeAtlas = async () => {
+  // Várunk a textúrák betöltésére
+  await loadAllTextures();
+  
+  // Most már regisztráljuk a textúrákat
+  for (const [rawType, def] of Object.entries(blockDefs)) {
+    const type = Number(rawType);
+    const variants = def.getMaterials ? def.getMaterials() : (def.variants || []);
+    const variantTiles = variants.map((variant) => {
+      if (Array.isArray(variant)) {
+        return variant.map((mat) => registerTexture(mat));
+      }
+      const tile = registerTexture(variant);
+      return [tile, tile, tile, tile, tile, tile];
+    });
+    blockFaceTiles[type] = variantTiles;
+    blockRenderGroups[type] = def.renderGroup || (def.solid === false ? "cutout" : "opaque");
+    blockMapFaces[type] = def.mapFace || null;
+  }
+  
+  atlas = buildAtlas();
+  return atlas;
+};
 
 const buildAtlas = () => {
   const count = tiles.length || 1;
@@ -85,12 +95,20 @@ const buildAtlas = () => {
   };
 };
 
-const atlas = buildAtlas();
+export const getAtlas = () => {
+  if (!atlas) {
+    throw new Error("Atlas még nem inicializálódott! Hívd meg az initializeAtlas()-t először.");
+  }
+  return atlas;
+};
+
+export { initializeAtlas };
 if (typeof window !== "undefined") {
-  window.__atlasCanvas = atlas.texture.image;
+  window.__initializeAtlas = initializeAtlas;
 }
 
 const createAtlasMaterial = (options = {}) => {
+  const atlas = getAtlas();
   const material = new THREE.MeshLambertMaterial({
     map: atlas.texture,
     ...options,
@@ -141,14 +159,26 @@ const createAtlasMaterial = (options = {}) => {
     };
   };
 
-  material.customProgramCacheKey = () => `atlas-${atlas.tilesPerRow}x${atlas.tilesPerCol}`;
+  material.customProgramCacheKey = () => {
+    const atlas = getAtlas();
+    return `atlas-${atlas.tilesPerRow}x${atlas.tilesPerCol}`;
+  };
   return material;
 };
 
-export const atlasMaterials = {
-  opaque: createAtlasMaterial(),
-  cutout: createAtlasMaterial({ transparent: true, opacity: 0.95 }),
-  water: createAtlasMaterial({ transparent: true, opacity: 0.7 }),
+export const createAtlasMaterials = () => {
+  return {
+    opaque: createAtlasMaterial(),
+    cutout: createAtlasMaterial({ transparent: true, opacity: 0.95 }),
+    water: createAtlasMaterial({ transparent: true, opacity: 0.7 }),
+  };
+};
+
+export let atlasMaterials = null;
+
+export const initAtlasMaterials = () => {
+  atlasMaterials = createAtlasMaterials();
+  return atlasMaterials;
 };
 
 export const getBlockRenderGroup = (type) => blockRenderGroups[type] || "opaque";
@@ -170,8 +200,12 @@ export const getBlockFaceTile = (type, faceIndex, x, y, z) => {
 
 export const atlasInfo = {
   tileSize: TILE_SIZE,
-  tilesPerRow: atlas.tilesPerRow,
-  tilesPerCol: atlas.tilesPerCol,
+  get tilesPerRow() {
+    return getAtlas().tilesPerRow;
+  },
+  get tilesPerCol() {
+    return getAtlas().tilesPerCol;
+  },
 };
 
 export { blockFaceTiles, blockRenderGroups, blockMapFaces };

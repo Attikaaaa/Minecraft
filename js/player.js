@@ -234,16 +234,37 @@ export const updatePlayer = (dt) => {
   const onGround = player.onGround;
   const baseFriction = onGround ? 0.6 * 0.91 : 0.91;
   let moveSpeed = onGround ? 0.1 * (0.16277136 / (baseFriction ** 3)) : 0.02;
-  if (movementEnabled && (input.sprint || input.boost)) moveSpeed *= 1.3;
+  
+  // Sprint mechanika (Minecraft 1:1)
+  const isSprinting = input.isSprinting && input.forward && !input.backward && player.hunger > 6;
+  if (movementEnabled && isSprinting) {
+    moveSpeed *= 1.3; // Sprint sebesség
+  }
+  
+  // Sprint leáll ha ütközünk vagy nincs éhség
+  if (isSprinting && player.hunger <= 6) {
+    input.isSprinting = false;
+  }
+  
+  // FOV változás sprint közben (Minecraft effect)
+  const targetFov = isSprinting ? 80 : 70;
+  const currentFov = camera.fov;
+  camera.fov += (targetFov - currentFov) * 0.1;
+  camera.updateProjectionMatrix();
 
   if (movementEnabled && input.jump && onGround && !input.jumping) {
     player.velocity.y = 0.42;
     input.jumping = true;
-    if (input.sprint && inputMag > 0) {
-      player.velocity.x -= Math.sin(yaw) * 0.2;
-      player.velocity.z += Math.cos(yaw) * 0.2;
+    
+    // Sprint jump boost - csak ha tisztán előre mész (Minecraft 1:1)
+    if (isSprinting && moveInput.z < 0 && Math.abs(moveInput.x) < 0.1) {
+      // Boost a nézési irányba
+      const boostAmount = 0.2;
+      player.velocity.x += Math.sin(yaw) * boostAmount;
+      player.velocity.z -= Math.cos(yaw) * boostAmount;
     }
-    player.exhaustion += 0.2;
+    
+    player.exhaustion += isSprinting ? 0.2 : 0.05;
   }
 
   if (inputMag > 0) {
@@ -443,7 +464,8 @@ export const updateSurvival = (dt) => {
   const dz = player.position.z - player.lastPos.z;
   const distance = Math.hypot(dx, dz);
   if (distance > 0) {
-    const exhaustionRate = input.sprint ? 0.12 : 0.04;
+    const isSprinting = input.isSprinting && input.forward;
+    const exhaustionRate = isSprinting ? 0.1 : 0.01; // Sprint = 10x több éhség
     player.exhaustion += distance * exhaustionRate;
     player.lastPos.copy(player.position);
   }

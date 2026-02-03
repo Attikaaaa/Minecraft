@@ -28,12 +28,15 @@ import { getBlock, initializeWorld, isWithinWorld, setBlock, spawn } from "./wor
 import { canvas, hud, menu, startBtn } from "./dom.js";
 import { lockPointer, unlockPointer } from "./controls.js";
 import { attackMob, spawnInitialMobs, spawnMob, updateMobTarget, updateMobs } from "./mobs.js";
-import { itemDefs } from "./items.js";
+import { itemDefs, refreshItemIcons } from "./items.js";
 import { getMobs } from "./mobs.js";
 import { closeChat, isChatOpen, openChat, updateChatDisplay } from "./chat.js";
 import { setTimeOfDay } from "./time.js";
 import { advanceTime, initTime } from "./time.js";
 import { recordFrameTime, setPerfTimings, startBenchmark, togglePerfOverlay, updatePerfOverlay } from "./perf.js";
+import { initializeAtlas, initAtlasMaterials } from "./atlas.js";
+import { blockIcons, getBlockIcons } from "./textures.js";
+import { updateFallingBlocks } from "./physics.js";
 
 const resize = () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -70,7 +73,7 @@ const benchState = {
   enabled: urlParams.get("bench") === "1",
   scenario: normalizeBenchScenario(urlParams.get("scenario")),
   started: false,
-  startAt: 0,
+  elapsedMs: 0,
   actionTimerMs: 0,
   actionPhase: 0,
   target: null,
@@ -119,7 +122,7 @@ const prepareBenchStart = () => {
 
 const startBenchScenario = () => {
   benchState.started = true;
-  benchState.startAt = performance.now();
+  benchState.elapsedMs = 0;
   benchState.actionTimerMs = 0;
   benchState.actionPhase = 0;
   startBenchmark(BENCH_DURATION_MS, `scenario-${benchState.scenario}`, {
@@ -130,8 +133,8 @@ const startBenchScenario = () => {
 
 const updateBenchScenario = (dt) => {
   if (!benchState.started) return;
-  const elapsedMs = performance.now() - benchState.startAt;
-  if (elapsedMs >= BENCH_DURATION_MS) {
+  benchState.elapsedMs += dt * 1000;
+  if (benchState.elapsedMs >= BENCH_DURATION_MS) {
     benchState.started = false;
     resetBenchInput();
     return;
@@ -227,7 +230,15 @@ const applyDebugState = () => {
   }
 };
 
-const startGame = () => {
+const startGame = async () => {
+  // Textúrák és atlas betöltése
+  console.log("Atlas inicializálása...");
+  await initializeAtlas();
+  initAtlasMaterials();
+  Object.assign(blockIcons, getBlockIcons());
+  refreshItemIcons();
+  console.log("Atlas kész!");
+  
   initializeWorld();
   initTime();
   state.mode = "playing";
@@ -261,13 +272,30 @@ window.addEventListener("keydown", (event) => {
     if (event.code === "Escape") closeChat();
     return;
   }
-  if (event.code === "KeyW" || event.code === "ArrowUp") input.forward = true;
+  
+  // Dupla W nyomás sprint (Minecraft mechanika)
+  if (event.code === "KeyW" || event.code === "ArrowUp") {
+    const now = Date.now();
+    if (!input.forward && now - input.lastWPress < 300) {
+      // Dupla W nyomás 300ms-en belül
+      input.isSprinting = true;
+    }
+    input.lastWPress = now;
+    input.forward = true;
+  }
+  
   if (event.code === "KeyS" || event.code === "ArrowDown") input.backward = true;
   if (event.code === "KeyA" || event.code === "ArrowLeft") input.left = true;
   if (event.code === "KeyD" || event.code === "ArrowRight") input.right = true;
   if (event.code === "Space") input.jump = true;
   if (event.code === "ShiftLeft") input.sprint = true;
-  if (event.code === "ControlLeft" || event.code === "ControlRight") input.boost = true;
+  
+  // Ctrl is sprint (Minecraft 1.15+)
+  if (event.code === "ControlLeft" || event.code === "ControlRight") {
+    input.isSprinting = true;
+    input.boost = true;
+  }
+  
   if (event.code === "KeyF") toggleFullscreen();
   if (event.code === "F3") {
     state.debugHud = !state.debugHud;
@@ -306,13 +334,31 @@ window.addEventListener("keydown", (event) => {
 
 window.addEventListener("keyup", (event) => {
   if (isChatOpen()) return;
-  if (event.code === "KeyW" || event.code === "ArrowUp") input.forward = false;
-  if (event.code === "KeyS" || event.code === "ArrowDown") input.backward = false;
+  if (event.code === "KeyW" || event.code === "ArrowUp") {
+    input.forward = false;
+    // Sprint leáll ha nem megyünk előre
+    if (input.isSprinting && !input.boost) {
+      input.isSprinting = false;
+    }
+  }
+  if (event.code === "KeyS" || event.code === "ArrowDown") {
+    input.backward = false;
+    // Sprint leáll ha hátra megyünk
+    if (input.isSprinting) {
+      input.isSprinting = false;
+    }
+  }
   if (event.code === "KeyA" || event.code === "ArrowLeft") input.left = false;
   if (event.code === "KeyD" || event.code === "ArrowRight") input.right = false;
   if (event.code === "Space") input.jump = false;
   if (event.code === "ShiftLeft") input.sprint = false;
-  if (event.code === "ControlLeft" || event.code === "ControlRight") input.boost = false;
+  if (event.code === "ControlLeft" || event.code === "ControlRight") {
+    input.boost = false;
+    // Sprint leáll ha elengedjük a Ctrl-t (kivéve ha dupla W-vel aktiváltuk)
+    if (input.isSprinting && !input.forward) {
+      input.isSprinting = false;
+    }
+  }
 });
 
 window.addEventListener("wheel", (event) => {
@@ -409,6 +455,7 @@ const tick = (time) => {
       const gameTimings = updateGame(dt);
       uiMs = gameTimings?.uiMs ?? 0;
       updateMobs(dt);
+      updateFallingBlocks(dt); // Minecraft fizika: falling blocks
     }
     updateItemEntities(dt, now, player, state.mode === "playing" && state.gamemode !== "spectator");
     const worldMs = performance.now() - worldStart;
@@ -484,6 +531,7 @@ window.render_game_to_text = () => {
       z: Number(mob.position.z.toFixed(2)),
       health: mob.health,
     })),
+    perfBench: typeof window !== "undefined" ? window.__perfBench || null : null,
   };
   return JSON.stringify(payload);
 };

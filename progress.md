@@ -114,6 +114,21 @@ Original prompt: Csinálj egy 3d játékot, wasd mozgas, nezes minden, minecraft
 - Playwright screenshot: output/web-game-water/shot-0.png.
 - Perf overlay bővítve: draw calls, tris, geometries, chunk/queue counts, water queue, render/world/ui/mesh/water ms (js/perf.js, js/main.js, js/world.js, js/water.js).
 - Playwright futtatva: output/web-game-perf-overlay/shot-0.png.
+- Meshing worker: új `js/mesher-worker.js`, worker init + queueing (js/world.js), neighbor face data + transferable buffers, coalesced dirty rebuild.
+- Bench determinisztika: bench scenario idő dt-hez kötve; bench seed `1337` ha `bench=1`.
+- Perf bench payload window.__perfBenchHistory-ba kerül.
+- Playwright: workeres build ellenőrizve (output/web-game-mesh-worker2/shot-0.png).
+- Meshing worker stabilizálva: buffer transfer formátum javítva, normalize on apply, worker init/stat debug.
+- Bench futtató script: `scripts/run_benchmark.js` (A/B/C, main/worker).
+- PERF_REPORT.md generálva (main vs worker eredmények).
 - Bench scenarios hozzáadva: `bench=1&scenario=A|B|C` (áll, auto‑sprint, place/break spam), fix seed bench módban, PERF_BENCH kibővített JSON (fps, frame time, timings, queuek).
 - PERF_REPORT.md sablon létrehozva a három scenárióhoz.
 - Playwright futtatás: WebGL hiba (three.js byteLength undefined) headless környezetben, a run megszakadt.
+- Item drop fizika: csökkentett induló sebesség, levegő/ground drag, ütközés AABB mintavételezéssel, padló/ceil clamp, így nem pattognak és nem mennek blokkokba.
+- Playwright futtatva (web-game): világ rendben.
+- Item drop fizika tovább szigorítva: nagyon kis kezdő sebesség, onGround állapot, snapToGround, oldalirány teljes megállítás földet érve. Playwright futtatva.
+- Bedrock textúra integrálva (textures/block/bedrock.png), új blockDef (id 19), atlas és ikon támogatás, világ mélység 64 marad.
+- Block ikon generálás javítva (helyes material indexek), grass side flipY visszaállítva.
+- Item ikonok frissítése: refreshItemIcons + main.js-ben atlas init után hívva.
+- Item drop stabilizálás: induló sebesség 0, földön nincs bobbing, így nem pattog/oldalra csúszik.
+- Playwright futtatva: output/web-game-run45 (shot-0.png rendben, errors nincs).

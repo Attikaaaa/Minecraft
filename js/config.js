@@ -1,8 +1,8 @@
 export const urlParams = new URLSearchParams(window.location.search);
 export const disablePointerLock = urlParams.has("nopointerlock");
 
-export const WORLD_MAX_HEIGHT = 32;
-export const SEA_LEVEL = 8;
+export const WORLD_MAX_HEIGHT = 64;
+export const SEA_LEVEL = 16;
 export const CHUNK_SIZE = 16;
 export const CHUNK_RADIUS = (() => {
   const sizeParam = urlParams.get("size");

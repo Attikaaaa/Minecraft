@@ -175,6 +175,35 @@ export const itemDefs = {
   chicken_spawn_egg: { name: "Csirke idéző", blockType: null, icon: eggIcons.chicken_spawn_egg, maxStack: 64, spawnMob: "chicken" },
 };
 
+const setItemIcon = (id, icon) => {
+  if (!itemDefs[id]) return;
+  if (!icon) return;
+  itemDefs[id].icon = icon;
+};
+
+export const refreshItemIcons = (icons = blockIcons) => {
+  setItemIcon("grass", icons[1]);
+  setItemIcon("dirt", icons[2]);
+  setItemIcon("stone", icons[3]);
+  setItemIcon("wood", icons[4]);
+  setItemIcon("leaves", icons[5]);
+  setItemIcon("sand", icons[6]);
+  setItemIcon("coal", icons[7]);
+  setItemIcon("water", icons[8]);
+  setItemIcon("crafting_table", icons[9]);
+  setItemIcon("plank", icons[10]);
+  setItemIcon("cobble", icons[11]);
+  setItemIcon("iron_ore", icons[12]);
+  setItemIcon("gold_ore", icons[13]);
+  setItemIcon("diamond", icons[14]);
+  setItemIcon("redstone", icons[15]);
+  setItemIcon("lapis", icons[16]);
+  setItemIcon("emerald", icons[17]);
+  setItemIcon("coal_item", icons[7]);
+  setItemIcon("torch", icons[18]);
+  return itemDefs;
+};
+
 export const blockTypeToItem = {
   1: "grass",
   2: "dirt",
@@ -211,6 +240,7 @@ export const blockHardness = {
   16: 3.0,
   17: 3.0,
   18: 0.1,
+  19: Infinity,
 };
 
 export const blockEffectiveTool = {
@@ -274,6 +304,7 @@ export const getBreakTimeSeconds = (blockType, toolId) => {
 
 export const getDropForBlock = (blockType, toolId) => {
   if (blockType === 8) return null;
+  if (blockType === 19) return null;
   const tool = itemDefs[toolId]?.tool;
   const requiredTool = blockHarvestTool[blockType];
   const requiredLevel = blockHarvestLevel[blockType] ?? 0;

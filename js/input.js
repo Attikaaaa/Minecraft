@@ -8,4 +8,6 @@ export const input = {
   boost: false,
   jumping: false,
   mining: false,
+  lastWPress: 0, // Dupla W nyomáshoz
+  isSprinting: false, // Tényleges sprint állapot
 };

@@ -7,7 +7,10 @@ export const lockPointer = () => {
   if (!document.body.contains(canvas)) return;
   try {
     canvas.focus();
-    canvas.requestPointerLock();
+    const result = canvas.requestPointerLock();
+    if (result && typeof result.catch === "function") {
+      result.catch(() => {});
+    }
   } catch (err) {
     console.warn("Pointer lock failed.", err);
   }

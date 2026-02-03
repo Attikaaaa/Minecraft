@@ -15,6 +15,7 @@ import {
   inventoryGridEl,
   inventoryHotbarEl,
   statusEl,
+  itemNameEl,
 } from "./dom.js";
 import { itemDefs, maxStackFor } from "./items.js";
 import { state } from "./state.js";
@@ -218,6 +219,7 @@ const updateHotbarSelectionUI = () => {
     const idx = Number(ui.slotEl.dataset.index);
     ui.slotEl.classList.toggle("selected", idx === state.selectedHotbar);
   });
+  showItemName();
 };
 
 const updateCursorItemUI = () => {
@@ -691,4 +693,38 @@ export const closeCraftingTable = () => {
   crosshairEl.classList.remove("hidden");
   lockPointer();
   updateAllSlotsUI();
+};
+
+let itemNameTimeout = null;
+
+export const showItemName = () => {
+  if (!itemNameEl) return;
+  
+  const slot = getSelectedSlot();
+  if (!slot || slotIsEmpty(slot)) {
+    itemNameEl.style.opacity = "0";
+    if (itemNameTimeout) {
+      clearTimeout(itemNameTimeout);
+      itemNameTimeout = null;
+    }
+    return;
+  }
+  
+  const itemDef = itemDefs[slot.id];
+  if (!itemDef) {
+    itemNameEl.style.opacity = "0";
+    return;
+  }
+  
+  itemNameEl.textContent = itemDef.name || slot.id;
+  itemNameEl.style.opacity = "1";
+  
+  if (itemNameTimeout) {
+    clearTimeout(itemNameTimeout);
+  }
+  
+  // 3 másodperc után kezd elhalványodni
+  itemNameTimeout = setTimeout(() => {
+    itemNameEl.style.opacity = "0";
+  }, 3000);
 };

@@ -4,6 +4,7 @@ export const menu = document.getElementById("menu");
 export const hud = document.getElementById("hud");
 export const statusEl = document.getElementById("status");
 export const crosshairEl = document.getElementById("crosshair");
+export const itemNameEl = document.getElementById("item-name");
 export const hotbarEl = document.getElementById("hotbar");
 export const handItemEl = document.getElementById("hand-item");
 export const handItemIconEl = document.getElementById("hand-item-icon");

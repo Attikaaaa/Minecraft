@@ -56,10 +56,12 @@ const pushQuad = (buffers, origin, du, dv, normal, tile, flip, isWater) => {
   const ny = normal[1];
   const nz = normal[2];
   const base = buffers.vertexCount;
+  
+  // Textúra ismétlődik minden blokkon (mint Minecraftban)
   const uLen = Math.abs(du[0] + du[1] + du[2]);
   const vLen = Math.abs(dv[0] + dv[1] + dv[2]);
-  const uMax = isWater ? 1 : uLen;
-  const vMax = isWater ? 1 : vLen;
+  const uMax = uLen;
+  const vMax = vLen;
 
   pushVertex(buffers, v0[0], v0[1], v0[2], nx, ny, nz, 0, 0, tile);
   pushVertex(buffers, v1[0], v1[1], v1[2], nx, ny, nz, uMax, 0, tile);

@@ -202,6 +202,20 @@ button:hover {
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
 }
 
+#item-name {
+  position: absolute;
+  bottom: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 14px;
+  color: rgba(255, 255, 255, 1);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
 #status {
   position: absolute;
   top: 8px;
