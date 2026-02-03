@@ -176,6 +176,11 @@ export const sendEntities = (payload) => {
   send({ type: "entities", ...payload });
 };
 
+export const sendPlayerData = (payload) => {
+  if (!network.connected) return;
+  send({ type: "player_data", ...payload });
+};
+
 export const sendChat = (payload) => {
   if (!network.connected) return;
   if (typeof payload === "string") {

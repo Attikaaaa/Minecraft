@@ -1,0 +1,92 @@
+{
+  "room": "8KKL3",
+  "hostId": "1",
+  "clientId": "2",
+  "playerSync": {
+    "hostMovedTo": {
+      "x": 2.5,
+      "y": 18.01,
+      "z": -5.65,
+      "yaw": 0,
+      "pitch": 0,
+      "onGround": true,
+      "health": 20,
+      "hunger": 20,
+      "velocity": {
+        "x": 0,
+        "y": -0.05,
+        "z": 0
+      }
+    },
+    "clientSeesPlayers": [
+      {
+        "id": "1",
+        "name": "Host",
+        "x": 2.5,
+        "y": 18.01,
+        "z": -5.56
+      }
+    ]
+  },
+  "blockSync": {
+    "hostPlaced": {
+      "pos": {
+        "x": 4,
+        "y": 20,
+        "z": -6
+      },
+      "type": 2,
+      "clientSaw": 2
+    },
+    "clientPlaced": {
+      "pos": {
+        "x": 3,
+        "y": 21,
+        "z": 0
+      },
+      "type": 3,
+      "hostSaw": 3
+    }
+  },
+  "timeSync": {
+    "clientTime": 0.75
+  },
+  "mobSync": [
+    {
+      "id": 7,
+      "type": "cow",
+      "x": 2.5,
+      "y": 18.006,
+      "z": -3.646,
+      "health": 10
+    }
+  ],
+  "itemSync": {
+    "clientItemsAfterSpawn": [
+      {
+        "entityId": 1,
+        "id": "plank",
+        "count": 1,
+        "x": 2,
+        "y": 19.441,
+        "z": 1
+      }
+    ],
+    "hostItemsAfterPickup": [
+      {
+        "entityId": 1,
+        "id": "plank",
+        "count": 1,
+        "x": 2,
+        "y": 13.25,
+        "z": 1
+      }
+    ]
+  },
+  "chatSync": [
+    "Idő beállítva: éjszaka",
+    "Summon: cow",
+    "Client: hello from client"
+  ],
+  "disconnect": []
+}

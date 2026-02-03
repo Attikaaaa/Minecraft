@@ -34,7 +34,16 @@ import {
   syncItemEntities,
   updateItemEntities,
 } from "./entities.js";
-import { killPlayer, player, placeBlock, resetMining, teleportPlayer, tryConsumeFood, updateGame } from "./player.js";
+import {
+  killPlayer,
+  player,
+  placeBlock,
+  resetMining,
+  teleportPlayer,
+  tryConsumeFood,
+  updateGame,
+  updateSurvivalUI,
+} from "./player.js";
 import { getBlock, initializeWorld, isWithinWorld, setBlock, spawn } from "./world.js";
 import {
   canvas,
@@ -61,6 +70,7 @@ import {
   pauseResumeBtn,
   startBtn,
   statusEl,
+  tabListEl,
   multiplayerMenuEl,
   mpNameInput,
   mpServerInput,
@@ -99,7 +109,16 @@ import {
 import { initializeAtlas, initAtlasMaterials } from "./atlas.js";
 import { blockIcons, getBlockIcons } from "./textures.js";
 import { updateFallingBlocks } from "./physics.js";
-import { network, connect, disconnect, sendAction, sendEntities, sendPlayerState, setNetworkHandlers } from "./network.js";
+import {
+  network,
+  connect,
+  disconnect,
+  sendAction,
+  sendEntities,
+  sendPlayerData,
+  sendPlayerState,
+  setNetworkHandlers,
+} from "./network.js";
 import {
   upsertRemotePlayer,
   removeRemotePlayer,
@@ -358,6 +377,40 @@ const closeMultiplayerMenu = () => {
   if (state.mode === "playing") lockPointer();
 };
 
+const getTabPlayers = () => {
+  if (!state.multiplayer.connected) return [];
+  const names = [];
+  const selfName = state.multiplayer.name || "You";
+  names.push(selfName);
+  for (const playerInfo of getRemotePlayers()) {
+    if (playerInfo?.name) names.push(playerInfo.name);
+  }
+  return names;
+};
+
+const updateTabList = () => {
+  if (!tabListEl) return;
+  if (!state.multiplayer.connected) {
+    tabListEl.innerHTML = "";
+    return;
+  }
+  const players = getTabPlayers();
+  const title = `<div class="tab-title">Játékosok: ${players.length}</div>`;
+  const rows = players.map((name) => `<div class="tab-row">${name}</div>`).join("");
+  tabListEl.innerHTML = `${title}${rows}`;
+};
+
+const openTabList = () => {
+  if (!tabListEl || !state.multiplayer.connected) return;
+  updateTabList();
+  tabListEl.classList.remove("hidden");
+};
+
+const closeTabList = () => {
+  if (!tabListEl) return;
+  tabListEl.classList.add("hidden");
+};
+
 const applyMultiplayerState = (payload) => {
   state.multiplayer.connected = true;
   state.multiplayer.enabled = true;
@@ -459,6 +512,7 @@ const resetInputState = () => {
 let lastPlayerStateSent = 0;
 let lastEntitiesSent = 0;
 let pendingSnapshot = null;
+let lastPlayerDataSent = 0;
 
 const buildPlayerStatePayload = () => {
   const selected = hotbar[state.selectedHotbar];
@@ -478,11 +532,63 @@ const buildPlayerStatePayload = () => {
   };
 };
 
+const applySlotPayload = (slot, data) => {
+  if (!data || !data.id || data.count <= 0) {
+    setSlot(slot, null, 0);
+    return;
+  }
+  setSlot(slot, data.id, data.count);
+  if (data.durability != null) {
+    slot.durability = data.durability;
+  }
+};
+
+const applyPlayerData = (data) => {
+  if (!data) return;
+  if (Array.isArray(data.hotbar)) {
+    for (let i = 0; i < hotbar.length; i += 1) {
+      applySlotPayload(hotbar[i], data.hotbar[i]);
+    }
+  }
+  if (Array.isArray(data.inventory)) {
+    for (let i = 0; i < inventory.length; i += 1) {
+      applySlotPayload(inventory[i], data.inventory[i]);
+    }
+  }
+  if (Number.isFinite(data.health)) player.health = data.health;
+  if (Number.isFinite(data.hunger)) player.hunger = data.hunger;
+  if (data.gamemode) state.gamemode = data.gamemode;
+  if (data.respawnPoint) state.respawnPoint = data.respawnPoint;
+  updateAllSlotsUI();
+  updateSurvivalUI();
+};
+
+const buildPlayerDataPayload = () => ({
+  hotbar: hotbar.map((slot) => ({
+    id: slot.id,
+    count: slot.count,
+    durability: slot.durability ?? null,
+  })),
+  inventory: inventory.map((slot) => ({
+    id: slot.id,
+    count: slot.count,
+    durability: slot.durability ?? null,
+  })),
+  health: player.health,
+  hunger: player.hunger,
+  gamemode: state.gamemode,
+  respawnPoint: state.respawnPoint,
+});
+
 const sendNetworkUpdates = (now) => {
   if (!network.connected) return;
   if (now - lastPlayerStateSent > 0.05) {
     lastPlayerStateSent = now;
     sendPlayerState(buildPlayerStatePayload());
+  }
+  if (now - lastPlayerDataSent > 1.0) {
+    lastPlayerDataSent = now;
+    sendPlayerData(buildPlayerDataPayload());
   }
   if (network.isHost && now - lastEntitiesSent > 0.2) {
     lastEntitiesSent = now;
@@ -905,6 +1011,9 @@ setNetworkHandlers({
     } else {
       pendingSnapshot = payload.snapshot;
     }
+    if (payload.playerData) {
+      applyPlayerData(payload.playerData);
+    }
     if (payload.seed !== randomSeed) {
       const link = buildJoinLink(payload.room, payload.seed);
       const seedParam = urlParams.get("seed");
@@ -925,10 +1034,12 @@ setNetworkHandlers({
   onPlayerState: (payload) => {
     if (!payload || payload.id === network.clientId) return;
     upsertRemotePlayer(payload);
+    if (tabListEl && !tabListEl.classList.contains("hidden")) updateTabList();
   },
   onPlayerLeave: (payload) => {
     if (!payload) return;
     removeRemotePlayer(payload.id);
+    if (tabListEl && !tabListEl.classList.contains("hidden")) updateTabList();
   },
   onBlockUpdate: (payload) => {
     if (!payload || payload.sourceId === network.clientId) return;
@@ -962,6 +1073,7 @@ setNetworkHandlers({
     state.multiplayer.isHost = false;
     state.multiplayer.room = null;
     clearRemotePlayers();
+    closeTabList();
     updateMultiplayerUI();
   },
   onError: (err) => {
@@ -980,6 +1092,24 @@ setNetworkHandlers({
       if (!action.type || !action.position) return;
       const pos = new THREE.Vector3(action.position.x, action.position.y, action.position.z);
       spawnMob(action.type, pos);
+      return;
+    }
+    if (action.kind === "block_update") {
+      const updates = Array.isArray(action.updates) ? action.updates : [];
+      for (const update of updates) {
+        if (!update || typeof update.key !== "string") continue;
+        const [sx, sy, sz] = update.key.split(",");
+        const x = Number(sx);
+        const y = Number(sy);
+        const z = Number(sz);
+        if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
+        setBlock(x, y, z, update.type ?? 0, {
+          skipWater: false,
+          skipPhysics: false,
+          waterLevel: update.waterLevel ?? null,
+          torchOrientation: update.torchOrientation ?? null,
+        });
+      }
       return;
     }
     if (action.kind === "set_time") {
@@ -1057,6 +1187,12 @@ window.addEventListener("keydown", (event) => {
 
   if (state.mode !== "playing") return;
 
+  if (event.code === "Tab") {
+    openTabList();
+    event.preventDefault();
+    return;
+  }
+
   // Dupla W nyomás sprint (Minecraft mechanika)
   if (event.code === "KeyW" || event.code === "ArrowUp") {
     const now = Date.now();
@@ -1112,6 +1248,11 @@ window.addEventListener("keydown", (event) => {
 window.addEventListener("keyup", (event) => {
   if (isChatOpen()) return;
   if (state.mode !== "playing") return;
+  if (event.code === "Tab") {
+    closeTabList();
+    event.preventDefault();
+    return;
+  }
   if (event.code === "KeyW" || event.code === "ArrowUp") {
     input.forward = false;
     // Sprint leáll ha nem megyünk előre

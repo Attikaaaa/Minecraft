@@ -56,6 +56,53 @@ const wss = new WebSocketServer({ server });
 
 let nextClientId = 1;
 const rooms = new Map();
+const SAVE_DIR = path.join(ROOT, "saves");
+fs.mkdirSync(SAVE_DIR, { recursive: true });
+
+const roomFile = (code) => path.join(SAVE_DIR, `${code}.json`);
+
+const serializeRoom = (room) => ({
+  code: room.code,
+  seed: room.seed,
+  timeOfDay: room.timeOfDay ?? null,
+  blocks: serializeBlocks(room),
+  mobs: room.mobs ?? [],
+  items: room.items ?? [],
+  playersByName: room.playersByName ? Object.fromEntries(room.playersByName) : {},
+});
+
+const saveRoom = (room) => {
+  try {
+    const payload = serializeRoom(room);
+    fs.writeFileSync(roomFile(room.code), JSON.stringify(payload));
+  } catch (err) {
+    console.error("Failed to save room", room.code, err);
+  }
+};
+
+const loadRoom = (code) => {
+  try {
+    const filePath = roomFile(code);
+    if (!fs.existsSync(filePath)) return null;
+    const raw = fs.readFileSync(filePath, "utf-8");
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error("Failed to load room", code, err);
+    return null;
+  }
+};
+
+const scheduleSave = (room) => {
+  room.saveDirty = true;
+  if (room.saveTimer) return;
+  room.saveTimer = setTimeout(() => {
+    room.saveTimer = null;
+    if (!room.saveDirty) return;
+    room.saveDirty = false;
+    saveRoom(room);
+  }, 1500);
+};
 
 const makeRoomCode = () => {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -103,16 +150,30 @@ const roomSnapshot = (room) => ({
 const ensureRoom = (code, seed) => {
   const existing = rooms.get(code);
   if (existing) return existing;
+  const saved = loadRoom(code);
   const room = {
     code,
-    seed,
+    seed: saved?.seed ?? seed,
     hostId: null,
     clients: new Map(),
     blocks: new Map(),
-    timeOfDay: null,
-    mobs: [],
-    items: [],
+    timeOfDay: saved?.timeOfDay ?? null,
+    mobs: saved?.mobs ?? [],
+    items: saved?.items ?? [],
+    playersByName: new Map(Object.entries(saved?.playersByName || {})),
+    saveTimer: null,
+    saveDirty: false,
   };
+  if (Array.isArray(saved?.blocks)) {
+    for (const entry of saved.blocks) {
+      if (!entry || typeof entry.key !== "string") continue;
+      room.blocks.set(entry.key, {
+        type: entry.type ?? 0,
+        waterLevel: entry.waterLevel ?? null,
+        torchOrientation: entry.torchOrientation ?? null,
+      });
+    }
+  }
   rooms.set(code, room);
   return room;
 };
@@ -125,11 +186,13 @@ const setHost = (room, clientId) => {
 const removeClient = (room, clientId) => {
   room.clients.delete(clientId);
   broadcast(room, { type: "player_leave", id: clientId });
+  scheduleSave(room);
   if (room.hostId === clientId) {
     const next = room.clients.keys().next();
     if (!next.done) {
       setHost(room, next.value);
     } else {
+      saveRoom(room);
       rooms.delete(room.code);
     }
   }
@@ -170,8 +233,10 @@ wss.on("connection", (ws) => {
         ws,
         name,
         lastState: null,
+        lastData: null,
       });
 
+      const savedPlayerData = room.playersByName?.get(name) || null;
       const snapshot = roomSnapshot(room);
       send(ws, {
         type: "welcome",
@@ -181,6 +246,7 @@ wss.on("connection", (ws) => {
         hostId: room.hostId,
         isHost: room.hostId === clientId,
         snapshot,
+        playerData: savedPlayerData,
       });
 
       broadcast(room, { type: "player_join", id: clientId, name }, clientId);
@@ -216,6 +282,13 @@ wss.on("connection", (ws) => {
 
     if (message.type === "block_update") {
       const updates = Array.isArray(message.updates) ? message.updates : [];
+      if (room.hostId && room.hostId !== clientId) {
+        const host = room.clients.get(room.hostId);
+        if (host) {
+          send(host.ws, { type: "action", from: clientId, action: { kind: "block_update", updates } });
+        }
+        return;
+      }
       for (const update of updates) {
         if (!update || typeof update.key !== "string") continue;
         room.blocks.set(update.key, {
@@ -224,6 +297,7 @@ wss.on("connection", (ws) => {
           torchOrientation: update.torchOrientation ?? null,
         });
       }
+      scheduleSave(room);
       broadcast(room, { type: "block_update", updates, sourceId: clientId }, clientId);
       return;
     }
@@ -233,6 +307,7 @@ wss.on("connection", (ws) => {
       if (Number.isFinite(message.timeOfDay)) room.timeOfDay = message.timeOfDay;
       if (Array.isArray(message.mobs)) room.mobs = message.mobs;
       if (Array.isArray(message.items)) room.items = message.items;
+      scheduleSave(room);
       broadcast(room, { type: "entities", timeOfDay: room.timeOfDay, mobs: room.mobs, items: room.items }, clientId);
       return;
     }
@@ -256,6 +331,25 @@ wss.on("connection", (ws) => {
       const host = room.clients.get(room.hostId);
       if (!host) return;
       send(host.ws, { type: "action", from: clientId, action: message.action || {} });
+      return;
+    }
+
+    if (message.type === "player_data") {
+      const client = room.clients.get(clientId);
+      if (!client) return;
+      const data = {
+        hotbar: Array.isArray(message.hotbar) ? message.hotbar : null,
+        inventory: Array.isArray(message.inventory) ? message.inventory : null,
+        health: Number.isFinite(message.health) ? message.health : null,
+        hunger: Number.isFinite(message.hunger) ? message.hunger : null,
+        gamemode: message.gamemode || null,
+        respawnPoint: message.respawnPoint || null,
+      };
+      client.lastData = data;
+      if (room.playersByName && client.name) {
+        room.playersByName.set(client.name, data);
+        scheduleSave(room);
+      }
       return;
     }
   });

@@ -1,0 +1,75 @@
+{
+  "room": "BV4V3",
+  "hostId": "1",
+  "clientId": "2",
+  "playerSync": {
+    "hostMovedTo": {
+      "x": 6.5,
+      "y": 18.03,
+      "z": 5.74,
+      "yaw": 0,
+      "pitch": 0,
+      "onGround": true,
+      "health": 20,
+      "hunger": 20,
+      "velocity": {
+        "x": 0,
+        "y": -0.05,
+        "z": -0.02
+      }
+    },
+    "clientSeesPlayers": [
+      {
+        "id": "1",
+        "name": "Host",
+        "x": 6.5,
+        "y": 18.03,
+        "z": 5.94
+      }
+    ]
+  },
+  "blockSync": {
+    "hostPlaced": {
+      "pos": {
+        "x": 8,
+        "y": 20,
+        "z": 5
+      },
+      "type": 2,
+      "clientSaw": 2
+    },
+    "clientPlaced": {
+      "pos": {
+        "x": 3,
+        "y": 31,
+        "z": 0
+      },
+      "type": 3,
+      "hostSaw": 3
+    }
+  },
+  "timeSync": {
+    "clientTime": 0.75
+  },
+  "mobSync": [
+    {
+      "id": 9,
+      "type": "cow",
+      "x": 6.5,
+      "y": 18.03,
+      "z": 7.713,
+      "health": 10
+    }
+  ],
+  "itemSync": {
+    "clientItemsAfterSpawn": [],
+    "hostItemsBeforePickup": [],
+    "hostItemsAfterPickup": []
+  },
+  "chatSync": [
+    "Idő beállítva: éjszaka",
+    "Summon: cow",
+    "Client: hello from client"
+  ],
+  "disconnect": []
+}

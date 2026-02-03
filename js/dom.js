@@ -5,6 +5,7 @@ export const menuResumeBtn = document.getElementById("menu-resume-btn");
 export const menuRestartBtn = document.getElementById("menu-restart-btn");
 export const hud = document.getElementById("hud");
 export const statusEl = document.getElementById("status");
+export const tabListEl = document.getElementById("tab-list");
 export const crosshairEl = document.getElementById("crosshair");
 export const itemNameEl = document.getElementById("item-name");
 export const hotbarEl = document.getElementById("hotbar");

@@ -1,0 +1,10 @@
+[
+  {
+    "type": "console.error",
+    "text": "THREE.WebGLProgram: Shader Error 0 - VALIDATE_STATUS false\n\nMaterial Name: \nMaterial Type: MeshLambertMaterial\n\nProgram Info Log: Fragment shader is not compiled.\n\u0000\n\nFRAGMENT\n\nERROR: 0:803: 'vUv' : undeclared identifier\nERROR: 0:805: 'mapTexelToLinear' : no matching overloaded function found\nERROR: 0:805: '=' : dimension mismatch\nERROR: 0:805: 'assign' : cannot convert from 'const mediump float' to 'highp 4-component vector of float'\n\u0000\n\n  798: #endif\n  799: \t\n  800:       #ifdef USE_MAP\n  801:         vec2 atlasScale = 1.0 / uAtlasSize;\n  802:         vec2 atlasOffset = vec2(mod(vTile, uAtlasSize.x), floor(vTile / uAtlasSize.x));\n> 803:         vec2 atlasUv = (fract(vUv) + atlasOffset) * atlasScale;\n  804:         vec4 texelColor = texture2D(map, atlasUv);\n  805:         texelColor = mapTexelToLinear(texelColor);\n  806:         diffuseColor *= texelColor;\n  807:       #endif\n  808:     \n  809: #if defined( USE_COLOR_ALPHA )"
+  },
+  {
+    "type": "console.error",
+    "text": "THREE.WebGLProgram: Shader Error 1282 - VALIDATE_STATUS false\n\nMaterial Name: \nMaterial Type: MeshLambertMaterial\n\nProgram Info Log: Fragment shader is not compiled.\n\u0000\n\nFRAGMENT\n\nERROR: 0:802: 'vUv' : undeclared identifier\nERROR: 0:804: 'mapTexelToLinear' : no matching overloaded function found\nERROR: 0:804: '=' : dimension mismatch\nERROR: 0:804: 'assign' : cannot convert from 'const mediump float' to 'highp 4-component vector of float'\n\u0000\n\n  797: #endif\n  798: \t\n  799:       #ifdef USE_MAP\n  800:         vec2 atlasScale = 1.0 / uAtlasSize;\n  801:         vec2 atlasOffset = vec2(mod(vTile, uAtlasSize.x), floor(vTile / uAtlasSize.x));\n> 802:         vec2 atlasUv = (fract(vUv) + atlasOffset) * atlasScale;\n  803:         vec4 texelColor = texture2D(map, atlasUv);\n  804:         texelColor = mapTexelToLinear(texelColor);\n  805:         diffuseColor *= texelColor;\n  806:       #endif\n  807:     \n  808: #if defined( USE_COLOR_ALPHA )"
+  }
+]

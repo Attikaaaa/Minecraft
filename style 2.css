@@ -1,0 +1,495 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: "Minecraftia", "Press Start 2P", "VT323", "Courier New", monospace;
+  background: #10151c;
+  color: #e7edf3;
+}
+
+#game {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  outline: none;
+}
+
+#ui {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.panel {
+  pointer-events: auto;
+  max-width: 520px;
+  background: rgba(20, 20, 20, 0.92);
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+  padding: 24px;
+  margin: 12vh auto 0;
+  text-align: center;
+  box-shadow: none;
+}
+
+button {
+  background: #8b8b8b;
+  color: #f8fafc;
+  border: 2px solid #c6c6c6;
+  border-radius: 2px;
+  padding: 10px 18px;
+  font-size: 14px;
+  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.6);
+  cursor: pointer;
+  margin-top: 16px;
+}
+
+button:hover {
+  background: #9c9c9c;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  z-index: 5;
+}
+
+.menu-panel {
+  max-width: 520px;
+  width: min(520px, 90vw);
+  padding: 22px 24px;
+  margin: 0;
+}
+
+.menu-buttons {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.menu-button {
+  width: 240px;
+  margin-top: 0;
+}
+
+.options-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0 8px;
+}
+
+.options-grid .menu-button {
+  width: 100%;
+}
+
+.option-row {
+  grid-column: span 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.option-row label {
+  flex: 1;
+  text-align: left;
+  font-size: 12px;
+}
+
+.option-row input[type="range"] {
+  flex: 1;
+}
+
+.option-row input[type="text"] {
+  flex: 1;
+  background: #1a1a1a;
+  border: 1px solid #3f3f3f;
+  color: #fff;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.option-value {
+  min-width: 48px;
+  text-align: right;
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.mp-status {
+  margin-top: 8px;
+  font-size: 12px;
+  text-align: center;
+  min-height: 18px;
+}
+
+.mp-link {
+  margin-top: 8px;
+  padding: 6px 8px;
+  background: #161616;
+  border: 1px solid #3f3f3f;
+  font-size: 11px;
+  word-break: break-all;
+}
+
+#hud.hidden {
+  display: none;
+}
+
+.hidden {
+  display: none !important;
+}
+
+#hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+#survival-bars {
+  position: absolute;
+  left: 50%;
+  bottom: 62px;
+  transform: translateX(-50%);
+  width: 392px;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.bar {
+  display: flex;
+  gap: 4px;
+}
+
+.status-icon {
+  width: 18px;
+  height: 18px;
+  background-size: cover;
+  image-rendering: pixelated;
+}
+
+#hotbar {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+  pointer-events: auto;
+}
+
+#hand-item {
+  position: absolute;
+  right: 18px;
+  bottom: 16px;
+  width: 90px;
+  height: 90px;
+  pointer-events: none;
+  transform: rotate(-12deg);
+  opacity: 0.95;
+}
+
+#hand-item-icon {
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.6));
+}
+
+.mining-bar {
+  position: absolute;
+  top: 58%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 140px;
+  height: 10px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.mining-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #facc15, #f59e0b, #ef4444);
+}
+
+.slot {
+  width: 40px;
+  height: 40px;
+  background: rgba(20, 20, 20, 0.85);
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  border-radius: 2px;
+  position: relative;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.5);
+}
+
+.slot.selected {
+  border-color: rgba(255, 255, 255, 0.9);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.item-icon {
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  image-rendering: pixelated;
+}
+
+.count {
+  position: absolute;
+  bottom: 2px;
+  right: 4px;
+  font-size: 12px;
+  color: #ffffff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+}
+
+.durability {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 4px;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 3px;
+  overflow: hidden;
+  display: none;
+}
+
+.durability > div {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #22c55e, #f59e0b, #ef4444);
+}
+
+#crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 26px;
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+}
+
+#item-name {
+  position: absolute;
+  bottom: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 14px;
+  color: rgba(255, 255, 255, 1);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+#status {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 6px 8px;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  line-height: 1.35;
+  min-width: 200px;
+  white-space: pre-line;
+  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.75);
+}
+
+#chat {
+  position: absolute;
+  left: 12px;
+  bottom: 90px;
+  width: 420px;
+  max-width: 60vw;
+  font-size: 12px;
+  line-height: 1.3;
+  color: #f1f5f9;
+  pointer-events: none;
+  text-shadow: 0 2px 3px rgba(0, 0, 0, 0.75);
+}
+
+#chat-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chat-line,
+.chat-suggestion {
+  padding: 2px 6px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 4px;
+}
+
+.chat-line {
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
+.chat-line.system {
+  color: #93c5fd;
+}
+
+.chat-line.error {
+  color: #fca5a5;
+}
+
+#chat-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #e2e8f0;
+  opacity: 0.85;
+}
+
+#chat-input-row {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.65);
+  padding: 6px 8px;
+  border-radius: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  pointer-events: auto;
+}
+
+.chat-prompt {
+  color: #e2e8f0;
+  font-weight: 600;
+}
+
+#chat-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #f8fafc;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+#inventory,
+#crafting-table {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  z-index: 4;
+}
+
+.inventory-panel {
+  background: rgba(20, 20, 20, 0.95);
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  border-radius: 2px;
+  padding: 16px 16px;
+  min-width: 520px;
+  box-shadow: none;
+}
+
+.inventory-title {
+  font-weight: 600;
+  margin-bottom: 12px;
+  text-align: center;
+  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.7);
+}
+
+.inventory-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+
+.inventory-grid,
+.inventory-hotbar {
+  display: grid;
+  grid-template-columns: repeat(9, 40px);
+  gap: 4px;
+}
+
+.crafting-panel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.craft-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 40px);
+  gap: 4px;
+}
+
+.craft-grid-large {
+  grid-template-columns: repeat(3, 40px);
+}
+
+.craft-arrow {
+  font-size: 22px;
+  opacity: 0.8;
+}
+
+.craft-output {
+  display: flex;
+  align-items: center;
+}
+
+.cursor-item {
+  position: fixed;
+  width: 32px;
+  height: 32px;
+  background-size: cover;
+  background-position: center;
+  image-rendering: pixelated;
+  color: #ffffff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 2px 3px;
+  pointer-events: none;
+  z-index: 5;
+}
+
+#death-screen {
+  position: absolute;
+  inset: 0;
+  background: rgba(12, 12, 12, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 6;
+  pointer-events: auto;
+}

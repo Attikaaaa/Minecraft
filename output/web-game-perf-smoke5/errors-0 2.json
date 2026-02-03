@@ -1,0 +1,10 @@
+[
+  {
+    "type": "console.error",
+    "text": "THREE.WebGLProgram: Shader Error 0 - VALIDATE_STATUS false\n\nMaterial Name: \nMaterial Type: MeshLambertMaterial\n\nProgram Info Log: Fragment shader is not compiled.\n\u0000\n\nFRAGMENT\n\nERROR: 0:806: 'mapTexelToLinear' : no matching overloaded function found\nERROR: 0:806: '=' : dimension mismatch\nERROR: 0:806: 'assign' : cannot convert from 'const mediump float' to 'highp 4-component vector of float'\n\u0000\n\n  801:       #if defined(USE_MAP) && defined(USE_UV)\n  802:         vec2 atlasScale = 1.0 / uAtlasSize;\n  803:         vec2 atlasOffset = vec2(mod(vTile, uAtlasSize.x), floor(vTile / uAtlasSize.x));\n  804:         vec2 atlasUv = (fract(vUv) + atlasOffset) * atlasScale;\n  805:         vec4 texelColor = texture2D(map, atlasUv);\n> 806:         texelColor = mapTexelToLinear(texelColor);\n  807:         diffuseColor *= texelColor;\n  808:       #endif\n  809:     \n  810: #if defined( USE_COLOR_ALPHA )\n  811: \tdiffuseColor *= vColor;\n  812: #elif defined( USE_COLOR )"
+  },
+  {
+    "type": "console.error",
+    "text": "THREE.WebGLProgram: Shader Error 1282 - VALIDATE_STATUS false\n\nMaterial Name: \nMaterial Type: MeshLambertMaterial\n\nProgram Info Log: Fragment shader is not compiled.\n\u0000\n\nFRAGMENT\n\nERROR: 0:805: 'mapTexelToLinear' : no matching overloaded function found\nERROR: 0:805: '=' : dimension mismatch\nERROR: 0:805: 'assign' : cannot convert from 'const mediump float' to 'highp 4-component vector of float'\n\u0000\n\n  800:       #if defined(USE_MAP) && defined(USE_UV)\n  801:         vec2 atlasScale = 1.0 / uAtlasSize;\n  802:         vec2 atlasOffset = vec2(mod(vTile, uAtlasSize.x), floor(vTile / uAtlasSize.x));\n  803:         vec2 atlasUv = (fract(vUv) + atlasOffset) * atlasScale;\n  804:         vec4 texelColor = texture2D(map, atlasUv);\n> 805:         texelColor = mapTexelToLinear(texelColor);\n  806:         diffuseColor *= texelColor;\n  807:       #endif\n  808:     \n  809: #if defined( USE_COLOR_ALPHA )\n  810: \tdiffuseColor *= vColor;\n  811: #elif defined( USE_COLOR )"
+  }
+]
