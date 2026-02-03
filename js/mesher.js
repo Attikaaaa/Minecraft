@@ -46,7 +46,7 @@ const pushVertex = (buffers, x, y, z, nx, ny, nz, u, v, tile) => {
   buffers.vertexCount += 1;
 };
 
-const pushQuad = (buffers, origin, du, dv, normal, tile, flip) => {
+const pushQuad = (buffers, origin, du, dv, normal, tile, flip, isWater) => {
   const [ox, oy, oz] = origin;
   const v0 = [ox, oy, oz];
   const v1 = [ox + du[0], oy + du[1], oz + du[2]];
@@ -58,11 +58,13 @@ const pushQuad = (buffers, origin, du, dv, normal, tile, flip) => {
   const base = buffers.vertexCount;
   const uLen = Math.abs(du[0] + du[1] + du[2]);
   const vLen = Math.abs(dv[0] + dv[1] + dv[2]);
+  const uMax = isWater ? 1 : uLen;
+  const vMax = isWater ? 1 : vLen;
 
   pushVertex(buffers, v0[0], v0[1], v0[2], nx, ny, nz, 0, 0, tile);
-  pushVertex(buffers, v1[0], v1[1], v1[2], nx, ny, nz, uLen, 0, tile);
-  pushVertex(buffers, v2[0], v2[1], v2[2], nx, ny, nz, uLen, vLen, tile);
-  pushVertex(buffers, v3[0], v3[1], v3[2], nx, ny, nz, 0, vLen, tile);
+  pushVertex(buffers, v1[0], v1[1], v1[2], nx, ny, nz, uMax, 0, tile);
+  pushVertex(buffers, v2[0], v2[1], v2[2], nx, ny, nz, uMax, vMax, tile);
+  pushVertex(buffers, v3[0], v3[1], v3[2], nx, ny, nz, 0, vMax, tile);
 
   if (!flip) {
     buffers.indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
@@ -193,7 +195,8 @@ export const buildChunkMeshBuffers = (chunk, getBlockAt) => {
           normal[d] = side;
           const flip = side === -1;
 
-          pushQuad(buffersByGroup[group], origin, du, dv, normal, tile, flip);
+          const isWater = group === GROUP_WATER;
+          pushQuad(buffersByGroup[group], origin, du, dv, normal, tile, flip, isWater);
 
           for (let dy = 0; dy < h; dy += 1) {
             for (let dx = 0; dx < w; dx += 1) {
