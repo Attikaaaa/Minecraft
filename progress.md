@@ -1,0 +1,40 @@
+Original prompt: Csinálj egy 3d játékot, wasd mozgas, nezes minden, minecraft
+
+- Létrehozva az alap HTML/CSS/JS vázat (Three.js, pointer lock, WASD, egérnézet).
+- Voxel világ generálás (dombok + fák), blokkok bontása/lerakása, kiválasztás 1–5.
+- Collision + ugrás, sprint, HUD és cél-blokk highlight.
+- render_game_to_text + advanceTime + fullscreen toggle.
+- Playwright tesztfuttatás + screenshot ellenőrzés kész.
+
+- Javítva: pointer lock hívás try/catch + fókuszálás (canvas tabindex) a Playwright hibák csökkentésére.
+- Playwright alatt (webdriver) kihagyjuk a pointer lockot, így nem dob hibát headless módban.
+- `?nopointerlock=1` URL param bevezetve a pointer lock tiltására tesztkörnyezetben.
+- Ideiglenes debug mezők render_game_to_text-ben (disablePointerLock, webdriver) a teszteléshez.
+- Playwright futtatva új output mappába (web-game-run2), hibák nélkül.
+- Debug mezők eltávolítva a render_game_to_text-ből a véglegeshez.
+- Playwright újra futtatva (web-game-run3), hibák nélkül.
+- HUD szöveg `white-space: pre-line`-nal javítva, hogy soronként jelenjen meg.
+- Playwright újra futtatva (web-game-run4), hibák nélkül.
+- Minecraft-szerűbb világ: új zaj-alapú magasságtérkép, biomeszerű felszín (fű/sand/kő), víz szint, ritka ércek.
+- Többszínű/variáns blokkanyagok (fű teteje/oldala/alja, homok, kő, szén), HemisphereLight hozzáadva.
+- Blokk választás bővítve 1–6-ra, HUD-ban blokk nevek.
+- Spawn hely keresése (tenger felett), fa-mentes zóna és spawn környék tisztítása.
+- HUD-ban seed kijelzés.
+- Blokkok pixel-textúrákat kaptak (procedurális, Minecraft-szerű), SRGB beállítással.
+- Új, Minecraft-szerűbb pixel-textúrák (palettás, speckle, fű oldalsáv, fa csíkozás, levelek átlátszó pixelek).
+- Inventory + hotbar + 2x2 crafting UI (Minecraft 1.8 stílusú layout) hozzáadva, E-vel nyitható.
+- Tárgykezelés: stackelés, bal/jobb klikkes mozgatás, craft output kezelése.
+- Craft receptek: fa -> deszka, deszka -> pálca, deszka 2x2 -> munkapad.
+- Hotbar görgetés egérgörgővel, slot választás 1–9.
+- Plank + crafting table blokk típusok, ikonok és új textúrák.
+- Bányászás időalapúvá téve: blokk keménység + eszköz típus/tier alapján számolt törésidő.
+- Eszközök (fa/kő: csákány, fejsze, lapát) + tartósság, hotbaron látható durability.
+- Kockakő (cobble) blokk + szénérc drop (szén item), kő csak csákánnyal ad dropot.
+- Crafting bővítve: 3x3 munkapad UI külön képernyőn (jobb klikk a munkapadon).
+- Receptekkal bővítve: csákány/fejsze/lapát (fa + kő), pálca, deszka, munkapad.
+- Chunk alapú világ (16x16) + dinamikus betöltés/kirakás (view radius 2), magasabb világ (32).
+- Barlangok 3D zajjal, ércek: vas/arany/gyémánt/redstone/lapis/smaragd + kockakő.
+- Harvest szintek és drop szabályok az új ércekre (kő csákánytól felfelé).
+- Életerő/éhség rendszer: 20 HP + 20 hunger, regen (hunger>=18), starvation, fall damage.
+- Death screen + respawn, HUD szívecskék és éhség ikonok.
+- Alma étel (inventory kezdéskor), jobb klikk fogyasztás.

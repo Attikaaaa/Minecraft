@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="hu">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Blockland 3D</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="ui">
+      <div id="menu" class="panel">
+        <h1>Blockland 3D</h1>
+        <p>WASD: mozgás · Egér: nézés · Space: ugrás · Shift: sprint</p>
+        <p>Bal klikk: bányászás (tartva) · Jobb klikk: blokk lerakás</p>
+        <p>1–9: hotbar · E: inventory · Jobb klikk munkapad: 3×3 crafting</p>
+        <p>F: fullscreen · Esc: kilépés a nézetből</p>
+        <button id="start-btn">Játék indítása</button>
+      </div>
+      <div id="hud" class="hidden">
+        <div id="crosshair">+</div>
+        <div id="status"></div>
+        <div id="hotbar" class="hotbar"></div>
+        <div id="mining-bar" class="mining-bar hidden">
+          <div id="mining-fill" class="mining-fill"></div>
+        </div>
+        <div id="survival-bars">
+          <div id="hearts" class="bar"></div>
+          <div id="hunger" class="bar"></div>
+        </div>
+      </div>
+    </div>
+    <div id="inventory" class="hidden">
+      <div class="inventory-panel">
+        <div class="inventory-title">Tárgyak</div>
+        <div class="inventory-body">
+          <div class="crafting-panel">
+            <div class="craft-grid" id="craft-grid"></div>
+            <div class="craft-arrow">→</div>
+            <div class="craft-output" id="craft-output"></div>
+          </div>
+          <div class="inventory-grid" id="inventory-grid"></div>
+          <div class="inventory-hotbar" id="inventory-hotbar"></div>
+        </div>
+      </div>
+      <div id="cursor-item" class="cursor-item hidden"></div>
+    </div>
+    <div id="crafting-table" class="hidden">
+      <div class="inventory-panel">
+        <div class="inventory-title">Munkapad</div>
+        <div class="inventory-body">
+          <div class="crafting-panel">
+            <div class="craft-grid craft-grid-large" id="craft-table-grid"></div>
+            <div class="craft-arrow">→</div>
+            <div class="craft-output" id="craft-table-output"></div>
+          </div>
+          <div class="inventory-grid" id="craft-table-inventory"></div>
+          <div class="inventory-hotbar" id="craft-table-hotbar"></div>
+        </div>
+      </div>
+      <div id="cursor-item-table" class="cursor-item hidden"></div>
+    </div>
+    <div id="death-screen" class="hidden">
+      <div class="panel">
+        <h2>Meghaltál</h2>
+        <p>Visszatérés a játékba?</p>
+        <button id="respawn-btn">Respawn</button>
+      </div>
+    </div>
+    <canvas id="game"></canvas>
+
+    <script type="module" src="main.js"></script>
+  </body>
+</html>
