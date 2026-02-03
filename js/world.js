@@ -359,7 +359,13 @@ const generateChunk = (chunk) => {
 };
 
 const applyBuffersToMesh = (chunk, key, buffers, material) => {
-  if (buffers.vertexCount === 0) {
+  if (!buffers || !Number.isFinite(buffers.vertexCount) || buffers.vertexCount === 0) {
+    const existing = chunk.meshes[key];
+    if (existing && existing.parent) existing.parent.remove(existing);
+    chunk.meshes[key] = null;
+    return;
+  }
+  if (!buffers.positions || !buffers.normals || !buffers.uvs || !buffers.tiles || !buffers.indices) {
     const existing = chunk.meshes[key];
     if (existing && existing.parent) existing.parent.remove(existing);
     chunk.meshes[key] = null;
@@ -410,6 +416,41 @@ const applyChunkMeshBuffers = (chunk, buffers) => {
   chunk.meshQueued = false;
   chunk.meshInFlight = false;
   chunk.loaded = true;
+};
+
+const toFloat32Array = (value) => {
+  if (!value) return null;
+  if (value instanceof Float32Array) return value;
+  if (value instanceof ArrayBuffer) return new Float32Array(value);
+  return null;
+};
+
+const toUint16Array = (value) => {
+  if (!value) return null;
+  if (value instanceof Uint16Array) return value;
+  if (value instanceof ArrayBuffer) return new Uint16Array(value);
+  return null;
+};
+
+const toUint32Array = (value) => {
+  if (!value) return null;
+  if (value instanceof Uint32Array) return value;
+  if (value instanceof ArrayBuffer) return new Uint32Array(value);
+  return null;
+};
+
+const normalizeWorkerBuffers = (buffers) => {
+  if (!buffers || !Number.isFinite(buffers.vertexCount) || buffers.vertexCount === 0) return buffers;
+  const indices =
+    buffers.indexType === "u32" ? toUint32Array(buffers.indices) : toUint16Array(buffers.indices);
+  return {
+    vertexCount: buffers.vertexCount,
+    positions: toFloat32Array(buffers.positions),
+    normals: toFloat32Array(buffers.normals),
+    uvs: toFloat32Array(buffers.uvs),
+    tiles: toFloat32Array(buffers.tiles),
+    indices,
+  };
 };
 
 const rebuildChunkMesh = (chunk) => {
@@ -548,7 +589,12 @@ const drainMeshApplyQueue = (budgetMs) => {
     const chunk = job.chunk;
     chunk.meshInFlight = false;
     if (!chunk.shouldBeLoaded) continue;
-    applyChunkMeshBuffers(chunk, payload.buffers);
+    const normalized = {
+      opaque: normalizeWorkerBuffers(payload.buffers?.opaque),
+      cutout: normalizeWorkerBuffers(payload.buffers?.cutout),
+      water: normalizeWorkerBuffers(payload.buffers?.water),
+    };
+    applyChunkMeshBuffers(chunk, normalized);
     worldTimings.workerMeshMs = payload.timeMs || 0;
     if (chunk.meshNeedsRebuild) {
       chunk.meshNeedsRebuild = false;

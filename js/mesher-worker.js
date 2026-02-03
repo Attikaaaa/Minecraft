@@ -269,15 +269,16 @@ const packBuffers = (buffers) => {
   const normals = new Float32Array(buffers.normals);
   const uvs = new Float32Array(buffers.uvs);
   const tiles = new Float32Array(buffers.tiles);
-  const indexArray =
-    buffers.vertexCount > 65535 ? new Uint32Array(buffers.indices) : new Uint16Array(buffers.indices);
+  const use32 = buffers.vertexCount > 65535;
+  const indexArray = use32 ? new Uint32Array(buffers.indices) : new Uint16Array(buffers.indices);
   return {
     vertexCount: buffers.vertexCount,
-    positions,
-    normals,
-    uvs,
-    tiles,
-    indices: indexArray,
+    positions: positions.buffer,
+    normals: normals.buffer,
+    uvs: uvs.buffer,
+    tiles: tiles.buffer,
+    indices: indexArray.buffer,
+    indexType: use32 ? "u32" : "u16",
   };
 };
 
@@ -333,11 +334,11 @@ self.onmessage = (event) => {
 
   const transfer = [];
   const collectTransfer = (buf) => {
-    if (buf?.positions) transfer.push(buf.positions.buffer);
-    if (buf?.normals) transfer.push(buf.normals.buffer);
-    if (buf?.uvs) transfer.push(buf.uvs.buffer);
-    if (buf?.tiles) transfer.push(buf.tiles.buffer);
-    if (buf?.indices) transfer.push(buf.indices.buffer);
+    if (buf?.positions) transfer.push(buf.positions);
+    if (buf?.normals) transfer.push(buf.normals);
+    if (buf?.uvs) transfer.push(buf.uvs);
+    if (buf?.tiles) transfer.push(buf.tiles);
+    if (buf?.indices) transfer.push(buf.indices);
   };
   collectTransfer(opaque);
   collectTransfer(cutout);
