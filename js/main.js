@@ -907,10 +907,17 @@ setNetworkHandlers({
     }
     if (payload.seed !== randomSeed) {
       const link = buildJoinLink(payload.room, payload.seed);
-      setMultiplayerStatus("Seed eltérés! Nyisd meg a meghívó linket.");
+      const seedParam = urlParams.get("seed");
+      const shouldReload =
+        urlParams.get("test") !== "1" &&
+        (!seedParam || Number(seedParam) !== Number(payload.seed));
+      setMultiplayerStatus("Seed eltérés! Újratöltés a pontos world-hez...");
       if (mpLinkEl && link) {
         mpLinkEl.textContent = `Meghívó link: ${link}`;
         mpLinkEl.classList.remove("hidden");
+      }
+      if (shouldReload && link) {
+        window.location.href = link;
       }
     }
     updateMultiplayerUI();

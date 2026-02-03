@@ -171,3 +171,6 @@ Teszt:
 - Chat parancsok /time és /summon kliensről host actionre küldenek.
 - Entities cleanup: kliens oldali item cleanup tiltva (allowCleanup) MP-ben.
 - Teszt lefuttatva: reports/multiplayer-2026-02-03T18-37-34-140Z (join/leave, player sync, block sync, time, mob, item pickup, chat OK).
+- Teszt: kreatív mód + pitch fel, W mozgatás -> Y nem változott (state-before/after), tehát előre nem emel.
+- Teszt: /speed 2 + /flyspeed 3 parancsok render_game_to_text-ben érvényesültek.
+- Playwright: output/web-game-test-pause, output/web-game-test-movement.
