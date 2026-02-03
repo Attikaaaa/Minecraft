@@ -15,16 +15,21 @@ const startServer = () => {
   return new Promise((resolve, reject) => {
     const server = spawn("node", ["server.js"], {
       cwd: rootDir,
-      env: { ...process.env, PORT: "8080" },
+      env: { ...process.env, PORT: "0" },
       stdio: ["ignore", "pipe", "pipe"],
     });
     let ready = false;
+    let port = null;
     const onData = (data) => {
       const text = data.toString();
       fs.appendFileSync(path.join(reportDir, "server.log"), text);
-      if (text.includes("Blockland 3D server running")) {
+      const match = text.match(/http:\/\/localhost:(\d+)/);
+      if (match) {
+        port = Number(match[1]);
+      }
+      if (text.includes("Blockland 3D server running") && port) {
         ready = true;
-        resolve(server);
+        resolve({ server, port });
       }
     };
     server.stdout.on("data", onData);
@@ -84,10 +89,10 @@ const getState = async (page) => {
   return JSON.parse(raw);
 };
 
-const connectHost = async (page, name) => {
+const connectHost = async (page, name, port) => {
   await openMultiplayerMenu(page);
   await page.fill("#mp-name", name);
-  await page.fill("#mp-server", "ws://localhost:8080");
+  await page.fill("#mp-server", `ws://localhost:${port}`);
   await page.fill("#mp-room", "");
   await page.click("#mp-host-btn");
   await page.waitForFunction(() => {
@@ -99,10 +104,10 @@ const connectHost = async (page, name) => {
   return getState(page);
 };
 
-const connectClient = async (page, name, room) => {
+const connectClient = async (page, name, room, port) => {
   await openMultiplayerMenu(page);
   await page.fill("#mp-name", name);
-  await page.fill("#mp-server", "ws://localhost:8080");
+  await page.fill("#mp-server", `ws://localhost:${port}`);
   await page.fill("#mp-room", room);
   await page.click("#mp-join-btn");
   await page.waitForFunction(() => {
@@ -121,7 +126,8 @@ const readChatLines = async (page) => {
 };
 
 const run = async () => {
-  const server = await startServer();
+  const serverInfo = await startServer();
+  const serverPort = serverInfo.port;
   const browser = await chromium.launch(buildLaunchOptions({ headless: true }));
   const hostContext = await browser.newContext(contextOptions);
   const clientContext = await browser.newContext(contextOptions);
@@ -131,7 +137,7 @@ const run = async () => {
   attachLogs(hostPage, "host");
   attachLogs(clientPage, "client");
 
-  const baseUrl = "http://localhost:8080/?test=1";
+  const baseUrl = `http://localhost:${serverPort}/?test=1`;
   await hostPage.goto(baseUrl, { waitUntil: "domcontentloaded" });
   await clientPage.goto(baseUrl, { waitUntil: "domcontentloaded" });
 
@@ -141,10 +147,10 @@ const run = async () => {
   await hostPage.click("canvas");
   await clientPage.click("canvas");
 
-  const hostState = await connectHost(hostPage, "Host");
+  const hostState = await connectHost(hostPage, "Host", serverPort);
   const room = hostState.multiplayer.room;
 
-  const clientState = await connectClient(clientPage, "Client", room);
+  const clientState = await connectClient(clientPage, "Client", room, serverPort);
 
   await sleep(800);
 
@@ -264,7 +270,7 @@ const run = async () => {
   await clientContext.close();
   await browser.close();
 
-  server.kill("SIGTERM");
+  serverInfo.server.kill("SIGTERM");
 
   return results;
 };

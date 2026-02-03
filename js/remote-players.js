@@ -1,6 +1,7 @@
 import { THREE, scene } from "./scene.js";
 
 const remotePlayers = new Map();
+const remoteMeshes = [];
 
 const BODY_COLOR = 0x4a90e2;
 const HEAD_COLOR = 0x7fc7ff;
@@ -34,16 +35,20 @@ const createNameSprite = (name) => {
 
 const createPlayerMesh = (name) => {
   const group = new THREE.Group();
+  group.userData.remotePlayerId = null;
   const bodyMat = new THREE.MeshLambertMaterial({ color: BODY_COLOR });
   const headMat = new THREE.MeshLambertMaterial({ color: HEAD_COLOR });
   const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.1, 0.45), bodyMat);
   body.position.set(0, 0.55, 0);
   const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), headMat);
   head.position.set(0, 1.35, 0);
+  body.userData.remotePlayerId = null;
+  head.userData.remotePlayerId = null;
   group.add(body, head);
 
   const { sprite, texture } = createNameSprite(name);
   sprite.position.set(0, 2.1, 0);
+  sprite.userData.remotePlayerId = null;
   group.add(sprite);
 
   return { group, label: sprite, labelTexture: texture };
@@ -56,6 +61,10 @@ export const upsertRemotePlayer = (data) => {
   let entry = remotePlayers.get(id);
   if (!entry) {
     const { group, label, labelTexture } = createPlayerMesh(name);
+    group.userData.remotePlayerId = id;
+    group.traverse((child) => {
+      child.userData.remotePlayerId = id;
+    });
     entry = {
       id,
       name,
@@ -72,6 +81,7 @@ export const upsertRemotePlayer = (data) => {
     group.rotation.set(0, entry.yaw, 0);
     scene.add(group);
     remotePlayers.set(id, entry);
+    remoteMeshes.push(group);
   }
 
   if (entry.name !== name) {
@@ -82,6 +92,7 @@ export const upsertRemotePlayer = (data) => {
     entry.label = sprite;
     entry.labelTexture = texture;
     sprite.position.set(0, 2.1, 0);
+    sprite.userData.remotePlayerId = id;
     entry.group.add(sprite);
   }
 
@@ -95,6 +106,8 @@ export const removeRemotePlayer = (id) => {
   const entry = remotePlayers.get(key);
   if (!entry) return;
   scene.remove(entry.group);
+  const idx = remoteMeshes.indexOf(entry.group);
+  if (idx >= 0) remoteMeshes.splice(idx, 1);
   entry.group.traverse((child) => {
     if (child.geometry) child.geometry.dispose();
     if (child.material) {
@@ -134,3 +147,6 @@ export const getRemotePlayers = () => Array.from(remotePlayers.values()).map((en
   yaw: entry.yaw,
 }));
 
+export const getRemotePlayerById = (id) => remotePlayers.get(String(id)) || null;
+
+export const getRemotePlayerMeshes = () => remoteMeshes;

@@ -1,4 +1,4 @@
-import { CHUNK_RADIUS } from "./config.js";
+import { CHUNK_RADIUS, defaultServerUrl } from "./config.js";
 
 export const state = {
   mode: "menu",
@@ -17,6 +17,7 @@ export const state = {
   targetedBlock: null,
   targetedFace: null,
   targetedMob: null,
+  targetedPlayer: null,
   blocks: 0,
   inventoryOpen: false,
   craftingTableOpen: false,
@@ -45,6 +46,6 @@ export const state = {
     isHost: false,
     room: null,
     name: "Player",
-    serverUrl: "ws://localhost:8080",
+    serverUrl: defaultServerUrl,
   },
 };

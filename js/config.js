@@ -1,5 +1,14 @@
 export const urlParams = new URLSearchParams(window.location.search);
 export const disablePointerLock = urlParams.has("nopointerlock");
+export const defaultServerUrl = (() => {
+  const fallback = "ws://localhost:8000";
+  if (typeof window === "undefined") return fallback;
+  const { protocol, hostname, port } = window.location;
+  if (!hostname) return fallback;
+  const wsProtocol = protocol === "https:" ? "wss" : "ws";
+  const host = port ? `${hostname}:${port}` : hostname;
+  return `${wsProtocol}://${host}`;
+})();
 
 export const VIEW_RADIUS_MIN = 1;
 export const VIEW_RADIUS_MAX = 32;

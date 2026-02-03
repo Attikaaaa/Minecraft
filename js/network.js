@@ -1,3 +1,5 @@
+import { defaultServerUrl } from "./config.js";
+
 export const network = {
   ws: null,
   connected: false,
@@ -7,12 +9,13 @@ export const network = {
   room: null,
   seed: null,
   name: "Player",
-  serverUrl: "ws://localhost:8080",
+  serverUrl: defaultServerUrl,
   onWelcome: null,
   onPlayerState: null,
   onBlockUpdate: null,
   onEntities: null,
   onChat: null,
+  onPlayerDamage: null,
   onAction: null,
   onPlayerJoin: null,
   onPlayerLeave: null,
@@ -126,6 +129,11 @@ export const connect = ({ url, room, name, isHost, seed }) => {
       return;
     }
 
+    if (payload.type === "player_damage") {
+      safeCall(network.onPlayerDamage, payload);
+      return;
+    }
+
     if (payload.type === "action") {
       safeCall(network.onAction, payload);
       return;
@@ -181,6 +189,11 @@ export const sendPlayerData = (payload) => {
   send({ type: "player_data", ...payload });
 };
 
+export const sendPlayerDamage = (targetId, amount = 1) => {
+  if (!network.connected) return;
+  send({ type: "player_damage", targetId, amount });
+};
+
 export const sendChat = (payload) => {
   if (!network.connected) return;
   if (typeof payload === "string") {
@@ -203,6 +216,7 @@ export const setNetworkHandlers = (handlers = {}) => {
   network.onBlockUpdate = handlers.onBlockUpdate || network.onBlockUpdate;
   network.onEntities = handlers.onEntities || network.onEntities;
   network.onChat = handlers.onChat || network.onChat;
+  network.onPlayerDamage = handlers.onPlayerDamage || network.onPlayerDamage;
   network.onPlayerJoin = handlers.onPlayerJoin || network.onPlayerJoin;
   network.onPlayerLeave = handlers.onPlayerLeave || network.onPlayerLeave;
   network.onHostChange = handlers.onHostChange || network.onHostChange;

@@ -40,6 +40,7 @@ import {
   placeBlock,
   resetMining,
   teleportPlayer,
+  takeDamage,
   tryConsumeFood,
   updateGame,
   updateSurvivalUI,
@@ -109,6 +110,7 @@ import {
 import { initializeAtlas, initAtlasMaterials } from "./atlas.js";
 import { blockIcons, getBlockIcons } from "./textures.js";
 import { updateFallingBlocks } from "./physics.js";
+import { raycastVoxel } from "./raycast.js";
 import {
   network,
   connect,
@@ -116,6 +118,7 @@ import {
   sendAction,
   sendEntities,
   sendPlayerData,
+  sendPlayerDamage,
   sendPlayerState,
   setNetworkHandlers,
 } from "./network.js";
@@ -125,6 +128,8 @@ import {
   updateRemotePlayers,
   clearRemotePlayers,
   getRemotePlayers,
+  getRemotePlayerById,
+  getRemotePlayerMeshes,
 } from "./remote-players.js";
 import { removeTorchOrientation, setTorchOrientation } from "./custom-blocks.js";
 
@@ -514,6 +519,33 @@ let lastEntitiesSent = 0;
 let pendingSnapshot = null;
 let lastPlayerDataSent = 0;
 
+const playerRaycaster = new THREE.Raycaster();
+playerRaycaster.far = 3.5;
+const playerRayCenter = new THREE.Vector2(0, 0);
+const playerRayDir = new THREE.Vector3();
+
+const updatePlayerTarget = () => {
+  const meshes = getRemotePlayerMeshes();
+  if (!meshes.length) {
+    state.targetedPlayer = null;
+    return;
+  }
+  playerRaycaster.setFromCamera(playerRayCenter, camera);
+  const hits = playerRaycaster.intersectObjects(meshes, true);
+  if (!hits.length) {
+    state.targetedPlayer = null;
+    return;
+  }
+  camera.getWorldDirection(playerRayDir);
+  const blockHit = raycastVoxel(camera.position, playerRayDir, playerRaycaster.far, getBlock);
+  if (blockHit && blockHit.distance + 0.01 < hits[0].distance) {
+    state.targetedPlayer = null;
+    return;
+  }
+  const targetId = hits[0].object.userData?.remotePlayerId;
+  state.targetedPlayer = targetId ? getRemotePlayerById(targetId) : null;
+};
+
 const buildPlayerStatePayload = () => {
   const selected = hotbar[state.selectedHotbar];
   return {
@@ -872,16 +904,25 @@ const applyDebugState = () => {
 
 loadSettings();
 loadMultiplayerSettings();
-if (!state.multiplayer.serverUrl) {
-  if (window.location.host) {
-    const proto = window.location.protocol === "https:" ? "wss" : "ws";
-    state.multiplayer.serverUrl = `${proto}://${window.location.host}`;
-  }
-} else if (state.multiplayer.serverUrl === "ws://localhost:8080") {
-  // Only auto-align to the current host when it's actually on 8080 (server.js).
-  if (window.location.port === "8080" && window.location.host) {
-    const proto = window.location.protocol === "https:" ? "wss" : "ws";
-    state.multiplayer.serverUrl = `${proto}://${window.location.host}`;
+if (window.location.host) {
+  const proto = window.location.protocol === "https:" ? "wss" : "ws";
+  const currentWs = `${proto}://${window.location.host}`;
+  const saved = state.multiplayer.serverUrl;
+  const isLocalHost = (value) => value === "localhost" || value === "127.0.0.1";
+  if (!saved) {
+    state.multiplayer.serverUrl = currentWs;
+  } else {
+    try {
+      const parsed = new URL(saved);
+      const sameLocal = isLocalHost(parsed.hostname) && isLocalHost(window.location.hostname);
+      const portMismatch = parsed.port !== window.location.port;
+      const legacyDefault = saved === "ws://localhost:8000" || saved === "ws://localhost:8080";
+      if ((sameLocal && portMismatch) || legacyDefault) {
+        state.multiplayer.serverUrl = currentWs;
+      }
+    } catch (err) {
+      state.multiplayer.serverUrl = currentWs;
+    }
   }
 }
 updateMultiplayerUI();
@@ -1036,9 +1077,15 @@ setNetworkHandlers({
     upsertRemotePlayer(payload);
     if (tabListEl && !tabListEl.classList.contains("hidden")) updateTabList();
   },
+  onPlayerJoin: (payload) => {
+    if (!payload || !payload.name) return;
+    addChatMessage(`${payload.name} csatlakozott.`, "system");
+    if (tabListEl && !tabListEl.classList.contains("hidden")) updateTabList();
+  },
   onPlayerLeave: (payload) => {
     if (!payload) return;
     removeRemotePlayer(payload.id);
+    if (payload.name) addChatMessage(`${payload.name} kilépett.`, "system");
     if (tabListEl && !tabListEl.classList.contains("hidden")) updateTabList();
   },
   onBlockUpdate: (payload) => {
@@ -1062,6 +1109,14 @@ setNetworkHandlers({
       return;
     }
     addChatMessage(`${payload.name}: ${payload.text}`, "player");
+  },
+  onPlayerDamage: (payload) => {
+    if (!payload || payload.amount == null) return;
+    takeDamage(payload.amount);
+    if (Number.isFinite(payload.health)) {
+      player.health = payload.health;
+      updateSurvivalUI();
+    }
   },
   onHostChange: () => {
     state.multiplayer.isHost = network.isHost;
@@ -1115,6 +1170,17 @@ setNetworkHandlers({
     if (action.kind === "set_time") {
       if (!Number.isFinite(action.value)) return;
       setTimeOfDay(action.value);
+      return;
+    }
+    if (action.kind === "attack_player") {
+      const targetId = action.targetId ? String(action.targetId) : null;
+      const amount = Number.isFinite(action.amount) ? action.amount : 2;
+      if (!targetId || amount <= 0) return;
+      if (targetId === network.clientId) {
+        takeDamage(amount);
+        return;
+      }
+      sendPlayerDamage(targetId, amount);
       return;
     }
     if (action.kind === "item_pickup") {
@@ -1310,6 +1376,20 @@ window.addEventListener("mousedown", (event) => {
   if (state.mode !== "playing" || !pointerActive()) return;
   if (state.gamemode === "spectator") return;
   if (event.button === 0) {
+    if (state.targetedPlayer) {
+      if (network.connected && state.targetedPlayer.id) {
+        if (network.isHost) {
+          if (state.targetedPlayer.id === network.clientId) {
+            takeDamage(2);
+          } else {
+            sendPlayerDamage(state.targetedPlayer.id, 2);
+          }
+        } else {
+          sendAction({ kind: "attack_player", targetId: state.targetedPlayer.id, amount: 2 });
+        }
+      }
+      return;
+    }
     if (state.targetedMob) {
       if (network.connected && !network.isHost) {
         sendAction({ kind: "attack_mob", mobId: state.targetedMob.id, damage: 2 });
@@ -1387,6 +1467,7 @@ const tick = (time) => {
       const isHostSim = !state.multiplayer.enabled || state.multiplayer.isHost;
       if (isHostSim) advanceTime(dt);
       updateMobTarget(camera, state);
+      updatePlayerTarget();
       const gameTimings = updateGame(dt);
       uiMs = gameTimings?.uiMs ?? 0;
       if (isHostSim) {

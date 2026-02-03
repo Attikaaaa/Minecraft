@@ -181,3 +181,9 @@ Teszt:
 - TAB list UI (játékos lista Tab lenyomásra).
 - Chat /say és /me multiplayer sync.
 - Teszt futtatva: reports/multiplayer-2026-02-03T18-45-16-677Z/results.json (join, player sync, block sync, time, mob, item pickup, chat OK).
+
+- Szerver random porttal indul (PORT=0), logban kiírja az aktuális portot.
+- start script frissítve random portra.
+- MP kliens auto serverUrl igazítás: ha localhost port eltér, automatikusan az aktuális host/portra áll.
+- run-multiplayer-test.mjs port autodetekcióra állítva (random port támogatás).
+- Teszt lefuttatva random porttal: reports/multiplayer-2026-02-03T18-50-31-788Z/results.json OK.

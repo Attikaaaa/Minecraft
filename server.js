@@ -3,7 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { WebSocketServer, WebSocket } from "ws";
 
-const PORT = Number(process.env.PORT || 8080);
+const PORT = Number(process.env.PORT || 8000);
+const HOST = process.env.HOST || "0.0.0.0";
 const ROOT = path.resolve(process.cwd());
 
 const MIME_TYPES = {
@@ -352,6 +353,32 @@ wss.on("connection", (ws) => {
       }
       return;
     }
+
+    if (message.type === "player_damage") {
+      if (room.hostId !== clientId) return;
+      const targetId = message.targetId ? String(message.targetId) : null;
+      const amount = Number.isFinite(message.amount) ? message.amount : 1;
+      if (!targetId || amount <= 0) return;
+      const target = room.clients.get(targetId);
+      if (!target) return;
+
+      let updatedHealth = null;
+      if (room.playersByName && target.name) {
+        const data = room.playersByName.get(target.name) || {};
+        const currentHealth = Number.isFinite(data.health) ? data.health : 20;
+        updatedHealth = Math.max(0, currentHealth - amount);
+        room.playersByName.set(target.name, { ...data, health: updatedHealth });
+        scheduleSave(room);
+      }
+
+      send(target.ws, {
+        type: "player_damage",
+        amount,
+        health: updatedHealth,
+        from: clientId,
+      });
+      return;
+    }
   });
 
   ws.on("close", () => {
@@ -360,6 +387,12 @@ wss.on("connection", (ws) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`Blockland 3D server running at http://localhost:${PORT}`);
+server.listen(PORT, HOST, () => {
+  const actualPort = server.address().port;
+  console.log(`Blockland 3D server running at http://localhost:${actualPort}`);
+  if (HOST === "0.0.0.0") {
+    console.log(`LAN: http://<szerver-ip>:${actualPort}`);
+  } else {
+    console.log(`Listening on http://${HOST}:${actualPort}`);
+  }
 });
