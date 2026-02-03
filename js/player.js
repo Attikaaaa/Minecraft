@@ -184,7 +184,7 @@ export const updatePlayer = (dt) => {
     const yaw = player.yaw;
     const cosPitch = Math.cos(player.pitch);
     forwardDir.set(Math.sin(yaw) * cosPitch, Math.sin(player.pitch), Math.cos(yaw) * cosPitch);
-    rightDir.set(Math.sin(yaw - Math.PI / 2), 0, Math.cos(yaw - Math.PI / 2));
+    rightDir.set(Math.sin(yaw + Math.PI / 2), 0, Math.cos(yaw + Math.PI / 2));
 
     desired.set(0, 0, 0);
     if (inputMag > 0) {

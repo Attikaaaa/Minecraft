@@ -123,7 +123,8 @@ const createAtlasMaterial = (options = {}) => {
       #if defined(USE_MAP) && defined(USE_UV)
         float tileIndex = floor(vTile + 0.5);
         vec2 atlasScale = 1.0 / uAtlasSize;
-        vec2 atlasOffset = vec2(mod(tileIndex, uAtlasSize.x), floor(tileIndex / uAtlasSize.x));
+        float row = floor(tileIndex / uAtlasSize.x);
+        vec2 atlasOffset = vec2(mod(tileIndex, uAtlasSize.x), (uAtlasSize.y - 1.0) - row);
         vec2 atlasUv = (fract(vUv) + atlasOffset) * atlasScale;
         vec4 texelColor = texture2D(map, atlasUv);
         diffuseColor *= texelColor;
