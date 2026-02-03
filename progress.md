@@ -132,3 +132,9 @@ Original prompt: Csinálj egy 3d játékot, wasd mozgas, nezes minden, minecraft
 - Item ikonok frissítése: refreshItemIcons + main.js-ben atlas init után hívva.
 - Item drop stabilizálás: induló sebesség 0, földön nincs bobbing, így nem pattog/oldalra csúszik.
 - Playwright futtatva: output/web-game-run45 (shot-0.png rendben, errors nincs).
+- ESC pause menü (Minecraft-szerű): játék megáll, HUD elrejt, inputok tiltva, pointer unlock. Gombok: vissza, beállítások, mentés/kilépés.
+- Beállítások képernyő: érzékenység és FOV slider, Debug HUD + Perf overlay toggle, fullscreen gomb; értékek localStorage-ben mentve.
+- Menü frissítve: Esc menüre utal, resume + új világ gombok.
+- render_game_to_text kibővítve menü/setting állapottal.
+- Playwright futtatva: output/web-game-pause-menu és output/web-game-options-menu2 screenshot ellenőrzés rendben.
+- Playwright kliens bővítve: "escape" gomb támogatás.

@@ -14,7 +14,11 @@
         <p>WASD: mozgás · Egér: nézés · Space: ugrás · Shift: sprint</p>
         <p>Bal klikk: bányászás (tartva) · Jobb klikk: blokk lerakás</p>
         <p>1–9: hotbar · E: inventory · Jobb klikk munkapad: 3×3 crafting</p>
-        <p>F: fullscreen · Esc: kilépés a nézetből</p>
+        <p>F: fullscreen · Esc: játék menü</p>
+        <div class="menu-buttons">
+          <button id="menu-resume-btn" class="menu-button">Játék folytatása</button>
+          <button id="menu-restart-btn" class="menu-button">Új világ</button>
+        </div>
       </div>
       <div id="hud" class="hidden">
         <div id="crosshair">+</div>
@@ -39,6 +43,37 @@
             <input id="chat-input" type="text" autocomplete="off" spellcheck="false" />
           </div>
         </div>
+      </div>
+    </div>
+    <div id="pause-menu" class="overlay hidden">
+      <div class="panel menu-panel">
+        <h2>Játék menü</h2>
+        <div class="menu-buttons">
+          <button id="pause-resume-btn" class="menu-button">Vissza a játékba</button>
+          <button id="pause-options-btn" class="menu-button">Beállítások...</button>
+          <button id="pause-quit-btn" class="menu-button">Mentés és kilépés</button>
+        </div>
+      </div>
+    </div>
+    <div id="options-menu" class="overlay hidden">
+      <div class="panel menu-panel">
+        <h2>Beállítások</h2>
+        <div class="options-grid">
+          <div class="option-row">
+            <label for="options-sensitivity">Egér érzékenység</label>
+            <input id="options-sensitivity" type="range" min="0.2" max="2" step="0.05" />
+            <span id="options-sensitivity-value" class="option-value"></span>
+          </div>
+          <div class="option-row">
+            <label for="options-fov">FOV</label>
+            <input id="options-fov" type="range" min="60" max="110" step="1" />
+            <span id="options-fov-value" class="option-value"></span>
+          </div>
+          <button id="options-debug-btn" class="menu-button">Debug HUD: Ki</button>
+          <button id="options-perf-btn" class="menu-button">Perf overlay: Ki</button>
+          <button id="options-fullscreen-btn" class="menu-button">Teljes képernyő</button>
+        </div>
+        <button id="options-back-btn" class="menu-button">Vissza</button>
       </div>
     </div>
     <div id="inventory" class="hidden">

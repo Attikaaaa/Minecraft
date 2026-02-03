@@ -154,6 +154,8 @@ export const setPerfOverlayEnabled = (enabled) => {
   overlayEl.classList.toggle("hidden", !enabled);
 };
 
+export const isPerfOverlayEnabled = () => overlayEnabled;
+
 export const togglePerfOverlay = () => setPerfOverlayEnabled(!overlayEnabled);
 
 export const recordFrameTime = (dt) => {

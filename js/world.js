@@ -4,6 +4,7 @@ import { noise2D, noise3D, hash2, hash3, smoothstep } from "./noise.js";
 import { blockDefs } from "./textures.js";
 import { atlasMaterials, blockFaceTiles, blockRenderGroups, blockMapFaces } from "./atlas.js";
 import { buildChunkMeshBuffers } from "./mesher.js";
+import { buildCustomBlocksForChunk, clearCustomBlocksForChunk } from "./custom-blocks.js";
 import { state } from "./state.js";
 import { createWaterSystem } from "./water.js";
 
@@ -464,6 +465,9 @@ const rebuildChunkMesh = (chunk) => {
   if (!chunk.generated) return;
   const buffers = buildChunkMeshBuffers(chunk, getBlock);
   applyChunkMeshBuffers(chunk, buffers);
+  
+  // Custom block models (torch, stb.)
+  buildCustomBlocksForChunk(chunk, getBlock);
 };
 
 const unloadChunk = (chunk) => {
@@ -474,6 +478,11 @@ const unloadChunk = (chunk) => {
     });
     scene.remove(chunk.group);
   }
+  
+  // Custom block meshek törlése
+  const chunkKey = `${chunk.cx},${chunk.cz}`;
+  clearCustomBlocksForChunk(chunkKey);
+  
   chunk.group = null;
   chunk.meshes.opaque = null;
   chunk.meshes.cutout = null;

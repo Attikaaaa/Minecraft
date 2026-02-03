@@ -1,10 +1,13 @@
 export const state = {
   mode: "menu",
   gamemode: "survival",
+  mouseSensitivity: 1,
+  fov: 75,
   lastTime: 0,
   manualTime: false,
   timeOfDay: 0.25,
   debugHud: false,
+  optionsOpen: false,
   targetedBlock: null,
   targetedFace: null,
   targetedMob: null,

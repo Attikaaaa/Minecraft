@@ -531,6 +531,7 @@ export const updateChatDisplay = () => {
 
 window.addEventListener("keydown", (event) => {
   if (state.chatOpen || state.inventoryOpen || state.craftingTableOpen) return;
+  if (state.mode !== "playing") return;
   if (event.code === "KeyT") {
     openChat("");
     event.preventDefault();

@@ -1,5 +1,6 @@
 import { CHUNK_SIZE, WORLD_MAX_HEIGHT } from "./config.js";
 import { getBlockFaceTile, getBlockRenderGroup } from "./atlas.js";
+import { blockDefs } from "./textures.js";
 
 const DIMS = [CHUNK_SIZE, WORLD_MAX_HEIGHT, CHUNK_SIZE];
 
@@ -117,13 +118,19 @@ export const buildChunkMeshBuffers = (chunk, getBlockAt) => {
           let tile = 0;
           let group = 0;
 
-          if (shouldRenderFace(a, b)) {
+          // Skip custom model blocks (torch, etc.)
+          const defA = a ? blockDefs[a] : null;
+          const defB = b ? blockDefs[b] : null;
+          const aIsCustom = defA && defA.customModel;
+          const bIsCustom = defB && defB.customModel;
+
+          if (!aIsCustom && shouldRenderFace(a, b)) {
             type = a;
             side = 1;
             const faceIndex = faceIndexFor(d, side);
             tile = getBlockFaceTile(type, faceIndex, ax, ay, az);
             group = groupIdForType(type);
-          } else if (shouldRenderFace(b, a)) {
+          } else if (!bIsCustom && shouldRenderFace(b, a)) {
             type = b;
             side = -1;
             const faceIndex = faceIndexFor(d, side);

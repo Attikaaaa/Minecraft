@@ -39,8 +39,9 @@ import {
   statusEl,
   respawnBtn,
 } from "./dom.js";
-import { statusIcons } from "./textures.js";
+import { statusIcons, blockDefs } from "./textures.js";
 import { lockPointer, unlockPointer } from "./controls.js";
+import { setTorchOrientation, removeTorchOrientation } from "./custom-blocks.js";
 
 const highlightGeometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(1.02, 1.02, 1.02));
 const highlightMaterial = new THREE.LineBasicMaterial({ color: 0xffff88 });
@@ -340,6 +341,12 @@ const completeMining = (blockType) => {
   const tx = state.targetedBlock.x;
   const ty = state.targetedBlock.y;
   const tz = state.targetedBlock.z;
+  
+  // Torch orientáció törlése
+  if (blockType === 18) {
+    removeTorchOrientation(tx, ty, tz);
+  }
+  
   removeBlock(tx, ty, tz);
   if (state.gamemode !== "creative") {
     const drop = getDropForBlock(blockType, toolId);
@@ -515,6 +522,21 @@ export const placeBlock = () => {
   if (!isWithinWorld(x, y, z)) return;
   if (getBlock(x, y, z) !== 0) return;
 
+  const selectedItem = getSelectedItemId();
+  const blockType = itemDefs[selectedItem]?.blockType;
+  if (!blockType) return;
+  
+  // Ellenőrizzük hogy a blokk támasztékot igényel-e (pl. fáklya)
+  const blockDef = blockDefs[blockType];
+  if (blockDef?.needsSupport) {
+    // Fáklya csak solid blokk mellé/alá rakható
+    const supportBlock = getBlock(target.x, target.y, target.z);
+    const supportDef = blockDefs[supportBlock];
+    if (!supportDef || !supportDef.solid) {
+      return; // Nincs solid támasz
+    }
+  }
+
   const playerBox = {
     minX: player.position.x - player.radius,
     maxX: player.position.x + player.radius,
@@ -540,9 +562,19 @@ export const placeBlock = () => {
     playerBox.minZ < blockMaxZ;
 
   if (intersectsPlayer) return;
-  const selectedItem = getSelectedItemId();
-  const blockType = itemDefs[selectedItem]?.blockType;
-  if (!blockType) return;
+  
+  // Torch orientáció beállítása a face alapján
+  if (blockType === 18) {
+    let orientation = 'floor';
+    if (ny === 1) orientation = 'floor'; // Felülre rakva
+    else if (ny === -1) orientation = 'floor'; // Alulra (nem szabályos, de legyen floor)
+    else if (nz === 1) orientation = 'north'; // Északi falra
+    else if (nz === -1) orientation = 'south'; // Déli falra
+    else if (nx === 1) orientation = 'east'; // Keleti falra
+    else if (nx === -1) orientation = 'west'; // Nyugati falra
+    setTorchOrientation(x, y, z, orientation);
+  }
+  
   setBlock(x, y, z, blockType);
   if (state.gamemode !== "creative") {
     selectedSlot.count -= 1;

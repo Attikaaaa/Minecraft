@@ -196,10 +196,7 @@ export const getBlockMaterials = () => {
       makeMat(t.craftingTableSide), makeMat(t.craftingTableSide), makeMat(t.craftingTableTop),
       makeMat(t.oakPlanks), makeMat(t.craftingTableFront), makeMat(t.craftingTableSide)
     ]],
-    torchMaterial: [
-      makeMat(t.torch), makeMat(t.torch), makeMat(t.torch),
-      makeMat(t.torch), makeMat(t.torch), makeMat(t.torch)
-    ],
+    torchMaterial: makeMat(t.torch, { transparent: true, alphaTest: 0.1 }),
   };
 };
 
@@ -225,10 +222,11 @@ export const blockDefs = {
     name: "Fáklya", 
     solid: false, 
     renderGroup: "cutout", 
-    getMaterials: () => [getBlockMaterials().torchMaterial], 
+    getMaterials: () => getBlockMaterials().torchMaterial, 
     mapFace: "side",
     isAttachable: true,
     needsSupport: true,
+    customModel: true, // Ne rendereljük a greedy meshing-gel
   },
   19: { name: "Bedrock", solid: true, renderGroup: "opaque", getMaterials: () => getBlockMaterials().bedrockMaterials },
 };
@@ -268,7 +266,7 @@ export const getBlockIcons = () => {
     15: textureToIcon(mats.redstoneOreMaterials[0][0]),
     16: textureToIcon(mats.lapisOreMaterials[0][0]),
     17: textureToIcon(mats.emeraldOreMaterials[0][0]),
-    18: textureToIcon(mats.torchMaterial[0]),
+    18: textureToIcon(mats.torchMaterial),
     19: textureToIcon(mats.bedrockMaterials[0][0]),
   };
 };
@@ -357,6 +355,14 @@ const pickVariant = (variants, x, y, z) => {
 export const getBlockMaterial = (type, x, y, z) => {
   const def = blockDefs[type];
   if (!def) return null;
-  const variants = def.getMaterials ? def.getMaterials() : (def.variants || []);
-  return pickVariant(variants, x, y, z);
+  
+  const materials = def.getMaterials ? def.getMaterials() : (def.variants || []);
+  
+  // Ha nem array (pl. torch), akkor közvetlenül visszaadjuk
+  if (!Array.isArray(materials)) {
+    return materials;
+  }
+  
+  // Ha array, akkor pickVariant
+  return pickVariant(materials, x, y, z);
 };

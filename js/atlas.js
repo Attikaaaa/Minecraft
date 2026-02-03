@@ -47,7 +47,21 @@ const initializeAtlas = async () => {
   // Most már regisztráljuk a textúrákat
   for (const [rawType, def] of Object.entries(blockDefs)) {
     const type = Number(rawType);
-    const variants = def.getMaterials ? def.getMaterials() : (def.variants || []);
+    let variants = def.getMaterials ? def.getMaterials() : (def.variants || []);
+    
+    // Ha customModel, akkor skip (torch, stb.)
+    if (def.customModel) {
+      blockFaceTiles[type] = [];
+      blockRenderGroups[type] = def.renderGroup || "cutout";
+      blockMapFaces[type] = def.mapFace || null;
+      continue;
+    }
+    
+    // Ha nem array, akkor array-be csomagoljuk
+    if (!Array.isArray(variants)) {
+      variants = [variants];
+    }
+    
     const variantTiles = variants.map((variant) => {
       if (Array.isArray(variant)) {
         return variant.map((mat) => registerTexture(mat));

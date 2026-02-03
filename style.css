@@ -55,6 +55,72 @@ button:hover {
   background: #9c9c9c;
 }
 
+.overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  z-index: 5;
+}
+
+.menu-panel {
+  max-width: 520px;
+  width: min(520px, 90vw);
+  padding: 22px 24px;
+  margin: 0;
+}
+
+.menu-buttons {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.menu-button {
+  width: 240px;
+  margin-top: 0;
+}
+
+.options-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0 8px;
+}
+
+.options-grid .menu-button {
+  width: 100%;
+}
+
+.option-row {
+  grid-column: span 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.option-row label {
+  flex: 1;
+  text-align: left;
+  font-size: 12px;
+}
+
+.option-row input[type="range"] {
+  flex: 1;
+}
+
+.option-value {
+  min-width: 48px;
+  text-align: right;
+  font-size: 12px;
+  opacity: 0.9;
+}
+
 #hud.hidden {
   display: none;
 }

@@ -2,13 +2,19 @@
 import { getBlock, setBlock, isWithinWorld } from "./world.js";
 import { spawnItemDrop } from "./entities.js";
 import { THREE, scene } from "./scene.js";
-import { getBlockMaterial } from "./textures.js";
+import { getBlockMaterial, blockDefs } from "./textures.js";
+import { removeTorchOrientation } from "./custom-blocks.js";
 
 // Falling block típusok (Minecraft 1:1)
 export const FALLING_BLOCKS = new Set([
   6,  // Homok
   // 19, // Kavics (ha hozzáadod később)
   // 20, // Concrete powder (ha hozzáadod később)
+]);
+
+// Blokkok amik támasztékot igényelnek (fáklya, virágok, stb.)
+export const NEEDS_SUPPORT_BLOCKS = new Set([
+  18, // Fáklya
 ]);
 
 // Falling block entitások
@@ -152,10 +158,66 @@ export const checkNeighborFalling = (x, y, z) => {
   // Felette lévő blokk
   checkFallingBlock(x, y + 1, z);
   
-  // Oldalsó blokkok (ha később támogatni akarjuk a sideways falling-ot)
-  // checkFallingBlock(x + 1, y, z);
-  // checkFallingBlock(x - 1, y, z);
-  // checkFallingBlock(x, y, z + 1);
-  // checkFallingBlock(x, y, z - 1);
+  // Támasztékot igénylő blokkok ellenőrzése (fáklya, stb.)
+  checkSupportedBlocks(x, y, z);
+};
+
+// Támasztékot igénylő blokkok ellenőrzése
+const checkSupportedBlocks = (x, y, z) => {
+  // Felette lévő blokk (pl. fáklya a falon)
+  const above = getBlock(x, y + 1, z);
+  if (NEEDS_SUPPORT_BLOCKS.has(above)) {
+    // Töröljük és item drop
+    removeTorchOrientation(x, y + 1, z);
+    setBlock(x, y + 1, z, 0, { skipPhysics: true });
+    spawnItemDrop(x + 0.5, y + 1, z + 0.5, above, 1);
+  }
+  
+  // Oldalsó blokkok (fáklya a falon)
+  const directions = [
+    [x + 1, y, z],
+    [x - 1, y, z],
+    [x, y, z + 1],
+    [x, y, z - 1],
+  ];
+  
+  for (const [nx, ny, nz] of directions) {
+    if (!isWithinWorld(nx, ny, nz)) continue;
+    const block = getBlock(nx, ny, nz);
+    if (NEEDS_SUPPORT_BLOCKS.has(block)) {
+      // Ellenőrizzük hogy van-e támasz
+      const hasSupport = checkBlockHasSupport(nx, ny, nz);
+      if (!hasSupport) {
+        removeTorchOrientation(nx, ny, nz);
+        setBlock(nx, ny, nz, 0, { skipPhysics: true });
+        spawnItemDrop(nx + 0.5, ny, nz + 0.5, block, 1);
+      }
+    }
+  }
+};
+
+// Ellenőrzi hogy egy blokknak van-e támasz
+const checkBlockHasSupport = (x, y, z) => {
+  // Alatta
+  const below = getBlock(x, y - 1, z);
+  const belowDef = blockDefs[below];
+  if (belowDef && belowDef.solid) return true;
+  
+  // Oldalt (bármelyik irányban)
+  const directions = [
+    [x + 1, y, z],
+    [x - 1, y, z],
+    [x, y, z + 1],
+    [x, y, z - 1],
+  ];
+  
+  for (const [nx, ny, nz] of directions) {
+    if (!isWithinWorld(nx, ny, nz)) continue;
+    const block = getBlock(nx, ny, nz);
+    const def = blockDefs[block];
+    if (def && def.solid) return true;
+  }
+  
+  return false;
 };
 
