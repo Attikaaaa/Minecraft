@@ -42,12 +42,28 @@ import {
 import { statusIcons, blockDefs } from "./textures.js";
 import { lockPointer, unlockPointer } from "./controls.js";
 import { setTorchOrientation, removeTorchOrientation } from "./custom-blocks.js";
+import { getPerfStats } from "./perf.js";
 
 const highlightGeometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(1.02, 1.02, 1.02));
 const highlightMaterial = new THREE.LineBasicMaterial({ color: 0xffff88 });
 const highlightMesh = new THREE.LineSegments(highlightGeometry, highlightMaterial);
 highlightMesh.visible = false;
 scene.add(highlightMesh);
+
+const AUTO_RESPAWN_DELAY_MS = 500;
+let autoRespawnTimer = null;
+const DEBUG_UPDATE_MS = 200;
+const TARGET_UPDATE_MS = 33;
+const targetLastCamPos = new THREE.Vector3();
+let lastTargetYaw = 0;
+let lastTargetPitch = 0;
+let lastTargetUpdate = 0;
+let lastDebugUpdate = 0;
+let lastDebugText = "";
+let lastHealth = null;
+let lastHunger = null;
+let lastHandItemId = null;
+let lastHandHidden = null;
 
 const moveInput = new THREE.Vector3();
 const forwardDir = new THREE.Vector3();
@@ -58,6 +74,8 @@ const tempPos = new THREE.Vector3();
 const groundTestPos = new THREE.Vector3();
 const rayDir = new THREE.Vector3();
 const targetFace = new THREE.Vector3();
+const lastChunkSamplePos = new THREE.Vector3();
+let hasChunkSample = false;
 
 export const player = {
   position: new THREE.Vector3(spawn.x + 0.5, Math.max(spawn.height + 2, SEA_LEVEL + 2), spawn.z + 0.5),
@@ -311,6 +329,19 @@ export const updatePlayer = (dt) => {
 };
 
 export const updateTarget = () => {
+  const now = performance.now();
+  const moved =
+    targetLastCamPos.distanceToSquared(camera.position) > 0.0004 ||
+    Math.abs(player.yaw - lastTargetYaw) > 0.0005 ||
+    Math.abs(player.pitch - lastTargetPitch) > 0.0005;
+  if (!moved && now - lastTargetUpdate < TARGET_UPDATE_MS) {
+    return;
+  }
+  lastTargetUpdate = now;
+  targetLastCamPos.copy(camera.position);
+  lastTargetYaw = player.yaw;
+  lastTargetPitch = player.pitch;
+
   camera.getWorldDirection(rayDir);
   const hit = raycastVoxel(camera.position, rayDir, 6, getBlock);
 
@@ -417,6 +448,9 @@ export const updateMining = (dt) => {
 export const updateSurvivalUI = () => {
   const health = Math.max(0, Math.min(20, player.health));
   const hunger = Math.max(0, Math.min(20, player.hunger));
+  if (health === lastHealth && hunger === lastHunger) return;
+  lastHealth = health;
+  lastHunger = hunger;
 
   for (let i = 0; i < HEART_COUNT; i += 1) {
     const value = health - i * 2;
@@ -441,6 +475,11 @@ const triggerDeath = () => {
   miningFillEl.style.width = "0%";
   updateTorchLight(false, null);
   unlockPointer();
+  if (autoRespawnTimer) clearTimeout(autoRespawnTimer);
+  autoRespawnTimer = setTimeout(() => {
+    autoRespawnTimer = null;
+    respawn();
+  }, AUTO_RESPAWN_DELAY_MS);
 };
 
 export const takeDamage = (amount) => {
@@ -603,6 +642,7 @@ export const tryConsumeFood = () => {
 };
 
 export const updateHud = () => {
+  const now = performance.now();
   const pos = player.position;
   const target = state.targetedBlock
     ? `${state.targetedBlock.x},${state.targetedBlock.y},${state.targetedBlock.z}`
@@ -615,33 +655,44 @@ export const updateHud = () => {
     selectedId && itemDefs[selectedId]?.durability != null ? selectedSlot?.durability : null;
   const modeLabel =
     state.gamemode === "creative" ? "Kreatív" : state.gamemode === "spectator" ? "Néző" : "Túlélő";
-  const lines = [
-    `Pozíció: ${pos.x.toFixed(2)}, ${pos.y.toFixed(2)}, ${pos.z.toFixed(2)}`,
-    `Sebesség: ${player.velocity.x.toFixed(2)}, ${player.velocity.y.toFixed(2)}, ${player.velocity.z.toFixed(2)}`,
-    `Talajon: ${player.onGround ? "igen" : "nem"}`,
-    `Cél blokk: ${target}`,
-    selectedDurability != null
-      ? `Kiválasztott: ${selectedName} (${selectedDurability})`
-      : `Kiválasztott: ${selectedName} x${selectedCount}`,
-    `Élet: ${player.health} · Éhség: ${player.hunger}`,
-    `Mód: ${modeLabel}`,
-    `Blokkok: ${state.blocks}`,
-    `Seed: ${randomSeed}`,
-  ];
-  if (statusEl) {
-    statusEl.textContent = lines.join("\n");
-    const shouldShow = state.debugHud && !state.inventoryOpen && !state.craftingTableOpen;
-    statusEl.classList.toggle("hidden", !shouldShow);
+  if (statusEl && state.debugHud && !state.inventoryOpen && !state.craftingTableOpen) {
+    const perfStats = getPerfStats();
+    if (now - lastDebugUpdate >= DEBUG_UPDATE_MS) {
+      lastDebugUpdate = now;
+      const lines = [
+        `TPS: ${perfStats.tps.toFixed(1)} · FPS: ${perfStats.fps.toFixed(1)}`,
+        `Pozíció: ${pos.x.toFixed(2)}, ${pos.y.toFixed(2)}, ${pos.z.toFixed(2)}`,
+        `Sebesség: ${player.velocity.x.toFixed(2)}, ${player.velocity.y.toFixed(2)}, ${player.velocity.z.toFixed(2)}`,
+        `Talajon: ${player.onGround ? "igen" : "nem"}`,
+        `Cél blokk: ${target}`,
+        selectedDurability != null
+          ? `Kiválasztott: ${selectedName} (${selectedDurability})`
+          : `Kiválasztott: ${selectedName} x${selectedCount}`,
+        `Élet: ${player.health} · Éhség: ${player.hunger}`,
+        `Mód: ${modeLabel}`,
+        `Blokkok: ${state.blocks}`,
+        `Seed: ${randomSeed}`,
+      ];
+      const text = lines.join("\n");
+      if (text !== lastDebugText) {
+        statusEl.textContent = text;
+        lastDebugText = text;
+      }
+    }
   }
   if (handItemEl && handItemIconEl) {
     const icon = selectedId ? itemDefs[selectedId]?.icon : null;
     const hideHand = state.inventoryOpen || state.craftingTableOpen || state.chatOpen;
-    if (icon && !hideHand) {
-      handItemEl.classList.remove("hidden");
-      handItemIconEl.style.backgroundImage = `url(${icon})`;
-    } else {
-      handItemEl.classList.add("hidden");
-      handItemIconEl.style.backgroundImage = "none";
+    if (selectedId !== lastHandItemId || hideHand !== lastHandHidden) {
+      lastHandItemId = selectedId;
+      lastHandHidden = hideHand;
+      if (icon && !hideHand) {
+        handItemEl.classList.remove("hidden");
+        handItemIconEl.style.backgroundImage = `url(${icon})`;
+      } else {
+        handItemEl.classList.add("hidden");
+        handItemIconEl.style.backgroundImage = "none";
+      }
     }
   }
   const holdingTorch = selectedId === "torch";
@@ -651,6 +702,10 @@ export const updateHud = () => {
 };
 
 export const respawn = () => {
+  if (autoRespawnTimer) {
+    clearTimeout(autoRespawnTimer);
+    autoRespawnTimer = null;
+  }
   player.health = 20;
   player.hunger = 20;
   player.exhaustion = 0;
@@ -688,6 +743,31 @@ respawnBtn?.addEventListener("click", () => {
 
 export const updateGame = (dt) => {
   updatePlayer(dt);
+  if (dt > 0) {
+    if (!hasChunkSample) {
+      lastChunkSamplePos.copy(player.position);
+      hasChunkSample = true;
+    }
+    const dx = player.position.x - lastChunkSamplePos.x;
+    const dz = player.position.z - lastChunkSamplePos.z;
+    const distance = Math.hypot(dx, dz);
+    const speed = distance / dt;
+    const boost = clamp(speed / 4, 1, 10);
+    state.chunkLoadBoost = boost;
+    if (speed > 1 && distance > 0.001) {
+      const dirX = dx / distance;
+      const dirZ = dz / distance;
+      const lookahead = Math.min(96, Math.max(0, speed * 0.6));
+      if (state.chunkLookahead) {
+        state.chunkLookahead.x = player.position.x + dirX * lookahead;
+        state.chunkLookahead.z = player.position.z + dirZ * lookahead;
+        state.chunkLookahead.active = true;
+      }
+    } else if (state.chunkLookahead) {
+      state.chunkLookahead.active = false;
+    }
+    lastChunkSamplePos.copy(player.position);
+  }
   if (!state.worldInitialized) initializeWorld();
   ensureChunksAround(player.position.x, player.position.z);
   updateWorld();

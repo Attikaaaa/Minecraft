@@ -660,32 +660,49 @@ const drainMeshApplyQueue = (budgetMs) => {
 export const ensureChunksAround = (x, z) => {
   const { cx, cz } = worldToChunk(x, z);
   const radius = getViewRadius();
+  const lookahead = state.chunkLookahead && state.chunkLookahead.active
+    ? worldToChunk(state.chunkLookahead.x, state.chunkLookahead.z)
+    : null;
+  const lookaheadCx = lookahead ? lookahead.cx : null;
+  const lookaheadCz = lookahead ? lookahead.cz : null;
   if (
     state.currentChunkX === cx &&
     state.currentChunkZ === cz &&
-    state.currentViewRadius === radius
+    state.currentViewRadius === radius &&
+    state.currentLookaheadChunkX === lookaheadCx &&
+    state.currentLookaheadChunkZ === lookaheadCz
   ) {
     return;
   }
   state.currentChunkX = cx;
   state.currentChunkZ = cz;
   state.currentViewRadius = radius;
+  state.currentLookaheadChunkX = lookaheadCx;
+  state.currentLookaheadChunkZ = lookaheadCz;
 
   const genCandidates = [];
   const meshCandidates = [];
   const needed = new Set();
-  for (let dx = -radius; dx <= radius; dx += 1) {
-    for (let dz = -radius; dz <= radius; dz += 1) {
-      const nx = cx + dx;
-      const nz = cz + dz;
-      const key = chunkKey(nx, nz);
-      needed.add(key);
-      const chunk = createChunk(nx, nz);
-      chunk.shouldBeLoaded = true;
-      if (!chunk.generated) {
-        if (!chunk.genQueued) genCandidates.push({ chunk, dist: dx * dx + dz * dz });
-      } else if ((chunk.dirty || !chunk.loaded) && !chunk.meshQueued) {
-        meshCandidates.push({ chunk, dist: dx * dx + dz * dz });
+  const centers = [{ cx, cz }];
+  if (lookahead && (lookahead.cx !== cx || lookahead.cz !== cz)) {
+    centers.push({ cx: lookahead.cx, cz: lookahead.cz });
+  }
+  for (const center of centers) {
+    for (let dx = -radius; dx <= radius; dx += 1) {
+      for (let dz = -radius; dz <= radius; dz += 1) {
+        const nx = center.cx + dx;
+        const nz = center.cz + dz;
+        const key = chunkKey(nx, nz);
+        if (needed.has(key)) continue;
+        needed.add(key);
+        const chunk = createChunk(nx, nz);
+        chunk.shouldBeLoaded = true;
+        const dist = (nx - cx) * (nx - cx) + (nz - cz) * (nz - cz);
+        if (!chunk.generated) {
+          if (!chunk.genQueued) genCandidates.push({ chunk, dist });
+        } else if ((chunk.dirty || !chunk.loaded) && !chunk.meshQueued) {
+          meshCandidates.push({ chunk, dist });
+        }
       }
     }
   }
@@ -707,10 +724,14 @@ export const ensureChunksAround = (x, z) => {
 };
 
 export const updateWorld = () => {
-  const genBudgetMs = 2.5;
-  const meshBudgetMs = 1.5;
-  const meshApplyBudgetMs = 1.5;
-  const maxMeshJobsPerFrame = 2;
+  const queueLoad = queueSize(genQueue) + queueSize(meshQueue) + queueSize(meshApplyQueue);
+  const boost = Math.max(1, state.chunkLoadBoost || 1);
+  const pressure = 1 + Math.min(4, queueLoad / 32);
+  const budgetScale = Math.min(12, Math.max(boost, pressure));
+  const genBudgetMs = 2.5 * budgetScale;
+  const meshBudgetMs = 1.5 * budgetScale;
+  const meshApplyBudgetMs = 1.5 * budgetScale;
+  const maxMeshJobsPerFrame = Math.max(2, Math.ceil(2 * budgetScale));
   const startGen = performance.now();
   while (queueSize(genQueue) && performance.now() - startGen < genBudgetMs) {
     const chunk = dequeue(genQueue);

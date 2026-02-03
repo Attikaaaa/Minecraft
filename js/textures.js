@@ -38,8 +38,67 @@ const loadTextureFromFile = (path) => {
   });
 };
 
+// Animált textúra betöltése (Minecraft water, lava, stb.)
+const loadAnimatedTexture = (path, frameCount = 32, frametime = 2) => {
+  return new Promise((resolve) => {
+    const texture = new THREE.TextureLoader().load(
+      path,
+      () => {
+        // Animált textúra setup
+        texture.repeat.set(1, 1 / frameCount);
+        texture.offset.set(0, 0);
+        texture.userData = {
+          animated: true,
+          frameCount: frameCount,
+          frametime: frametime, // ticks per frame
+          currentFrame: 0,
+          timer: 0
+        };
+        resolve(texture);
+      },
+      undefined,
+      (err) => {
+        console.warn(`Animált textúra nem található: ${path}`);
+        resolve(loadTextureFromFile(path));
+      }
+    );
+    texture.magFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.NearestFilter;
+    texture.generateMipmaps = false;
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping; // Animált textúrához clamp kell
+    texture.flipY = false;
+  });
+};
+
 const makeMat = (texture, opts = {}) =>
   new THREE.MeshLambertMaterial({ map: texture, ...opts });
+
+const applyTintToTexture = (texture, color) => {
+  if (!texture || !texture.image) return;
+  const canvas = document.createElement("canvas");
+  const width = texture.image.width || 16;
+  const height = texture.image.height || 16;
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(texture.image, 0, 0, width, height);
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const data = imageData.data;
+  const tintR = (color >> 16) & 255;
+  const tintG = (color >> 8) & 255;
+  const tintB = color & 255;
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = Math.round((data[i] * tintR) / 255);
+    data[i + 1] = Math.round((data[i + 1] * tintG) / 255);
+    data[i + 2] = Math.round((data[i + 2] * tintB) / 255);
+  }
+  ctx.putImageData(imageData, 0, 0);
+  texture.userData = texture.userData || {};
+  texture.userData.sourceCanvas = canvas;
+  texture.userData.tintColor = color;
+};
 
 // Textúrák
 let texturesLoaded = false;
@@ -62,7 +121,8 @@ export const loadAllTextures = async () => {
     loadTextureFromFile('textures/coal_ore.png'),
     loadTextureFromFile('textures/cobblestone.png'),
     loadTextureFromFile('textures/oak_planks.png'),
-    loadTextureFromFile('textures/water_still.png'),
+    loadAnimatedTexture('textures/water/water_still.png', 32, 2),
+    loadAnimatedTexture('textures/water/water_flow.png', 32, 2),
     loadTextureFromFile('textures/crafting_table_top.png'),
     loadTextureFromFile('textures/crafting_table_side.png'),
     loadTextureFromFile('textures/crafting_table_front.png'),
@@ -88,19 +148,26 @@ export const loadAllTextures = async () => {
     coalOre: textureList[8],
     cobblestone: textureList[9],
     oakPlanks: textureList[10],
-    water: textureList[11],
-    craftingTableTop: textureList[12],
-    craftingTableSide: textureList[13],
-    craftingTableFront: textureList[14],
-    ironOre: textureList[15],
-    goldOre: textureList[16],
-    diamondOre: textureList[17],
-    redstoneOre: textureList[18],
-    lapisOre: textureList[19],
-    emeraldOre: textureList[20],
-    torch: textureList[21],
-    bedrock: textureList[22],
+    waterStill: textureList[11],
+    waterFlow: textureList[12],
+    craftingTableTop: textureList[13],
+    craftingTableSide: textureList[14],
+    craftingTableFront: textureList[15],
+    ironOre: textureList[16],
+    goldOre: textureList[17],
+    diamondOre: textureList[18],
+    redstoneOre: textureList[19],
+    lapisOre: textureList[20],
+    emeraldOre: textureList[21],
+    torch: textureList[22],
+    bedrock: textureList[23],
   };
+
+  // Minecraft biome tint (approx.) for grass/leaves.
+  const GRASS_TINT = 0x7ca35a;
+  const LEAVES_TINT = 0x5fa84d;
+  applyTintToTexture(textures.grassTop, GRASS_TINT);
+  applyTintToTexture(textures.oakLeaves, LEAVES_TINT);
   
   texturesLoaded = true;
   console.log("Textúrák betöltve!");
@@ -161,12 +228,12 @@ export const getBlockMaterials = () => {
       makeMat(t.oakPlanks), makeMat(t.oakPlanks), makeMat(t.oakPlanks)
     ]],
     waterMaterial: [
-      makeMat(t.water, { transparent: true, opacity: 0.7 }),
-      makeMat(t.water, { transparent: true, opacity: 0.7 }),
-      makeMat(t.water, { transparent: true, opacity: 0.7 }),
-      makeMat(t.water, { transparent: true, opacity: 0.7 }),
-      makeMat(t.water, { transparent: true, opacity: 0.7 }),
-      makeMat(t.water, { transparent: true, opacity: 0.7 })
+      makeMat(t.waterStill, { transparent: true, opacity: 0.8, color: 0x3F76E4, side: THREE.DoubleSide }),
+      makeMat(t.waterStill, { transparent: true, opacity: 0.8, color: 0x3F76E4, side: THREE.DoubleSide }),
+      makeMat(t.waterStill, { transparent: true, opacity: 0.8, color: 0x3F76E4, side: THREE.DoubleSide }),
+      makeMat(t.waterStill, { transparent: true, opacity: 0.8, color: 0x3F76E4, side: THREE.DoubleSide }),
+      makeMat(t.waterFlow, { transparent: true, opacity: 0.8, color: 0x3F76E4, side: THREE.DoubleSide }),
+      makeMat(t.waterFlow, { transparent: true, opacity: 0.8, color: 0x3F76E4, side: THREE.DoubleSide })
     ],
     ironOreMaterials: [[
       makeMat(t.ironOre), makeMat(t.ironOre), makeMat(t.ironOre),
@@ -365,4 +432,29 @@ export const getBlockMaterial = (type, x, y, z) => {
   
   // Ha array, akkor pickVariant
   return pickVariant(materials, x, y, z);
+};
+
+// Animált textúrák frissítése (víz, láva)
+let globalAnimationTime = 0;
+
+export const updateAnimatedTextures = (dt) => {
+  if (!texturesLoaded) return;
+  
+  globalAnimationTime += dt;
+  const tickTime = 0.05; // 1 tick = 0.05 sec (20 ticks/sec)
+  
+  Object.values(textures).forEach(texture => {
+    if (!texture || !texture.userData || !texture.userData.animated) return;
+    
+    const data = texture.userData;
+    
+    // Minecraft: frametime ticks per frame
+    const frameTimeSeconds = data.frametime * tickTime;
+    
+    // Globális idő alapján számoljuk a frame-et (minden chunk ugyanazt látja)
+    const currentFrame = Math.floor(globalAnimationTime / frameTimeSeconds) % data.frameCount;
+    
+    // Offset frissítése (Y irányban mozog a textúra)
+    texture.offset.y = currentFrame / data.frameCount;
+  });
 };

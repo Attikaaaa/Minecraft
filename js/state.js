@@ -38,6 +38,10 @@ export const state = {
   currentChunkX: null,
   currentChunkZ: null,
   currentViewRadius: null,
+  currentLookaheadChunkX: null,
+  currentLookaheadChunkZ: null,
+  chunkLoadBoost: 1,
+  chunkLookahead: { x: 0, z: 0, active: false },
   worldInitialized: false,
   respawnPoint: null,
   multiplayer: {

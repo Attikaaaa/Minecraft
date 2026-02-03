@@ -8,6 +8,10 @@ let frameIndex = 0;
 let frameCount = 0;
 let lastOverlayUpdate = 0;
 let overlayEnabled = false;
+let lastStatsUpdate = 0;
+let cachedStats = { fps: 0, avgMs: 0, p99Ms: 0, tps: 0, mspt: 0 };
+let smoothedWorldMs = 0;
+let hasWorldMs = false;
 
 const overlayEl = document.createElement("div");
 overlayEl.id = "perf-overlay";
@@ -47,6 +51,12 @@ const computeStats = () => {
 };
 
 const formatNumber = (value, digits = 1) => Number(value).toFixed(digits);
+
+const computeTps = (mspt) => {
+  if (!Number.isFinite(mspt) || mspt <= 0) return 20;
+  const tps = 1000 / mspt;
+  return Math.min(20, tps);
+};
 
 let benchActive = false;
 let benchStart = 0;
@@ -177,6 +187,14 @@ export const setPerfTimings = (timings) => {
   if (Number.isFinite(timings.renderMs)) lastTimings.renderMs = timings.renderMs;
   if (Number.isFinite(timings.worldMs)) lastTimings.worldMs = timings.worldMs;
   if (Number.isFinite(timings.uiMs)) lastTimings.uiMs = timings.uiMs;
+  if (Number.isFinite(timings.worldMs)) {
+    if (!hasWorldMs) {
+      smoothedWorldMs = timings.worldMs;
+      hasWorldMs = true;
+    } else {
+      smoothedWorldMs = smoothedWorldMs * 0.9 + timings.worldMs * 0.1;
+    }
+  }
   if (benchActive) {
     benchTimingFrames += 1;
     benchTimingSums.renderMs += lastTimings.renderMs;
@@ -212,4 +230,21 @@ export const updatePerfOverlay = () => {
     `Render: ${formatNumber(lastTimings.renderMs, 2)}ms  World: ${formatNumber(lastTimings.worldMs, 2)}ms\n` +
     `Mesh: ${formatNumber(worldTimings.meshMs, 2)}ms  Water: ${formatNumber(worldTimings.waterMs, 2)}ms  UI: ${formatNumber(lastTimings.uiMs, 2)}ms\n` +
     `Heap: ${memory}`;
+};
+
+export const getPerfStats = () => {
+  const now = performance.now();
+  if (now - lastStatsUpdate > 250) {
+    const stats = computeStats();
+    const mspt = hasWorldMs ? smoothedWorldMs : 0;
+    cachedStats = {
+      fps: stats.fps,
+      avgMs: stats.avgMs,
+      p99Ms: stats.p99Ms,
+      tps: computeTps(mspt),
+      mspt,
+    };
+    lastStatsUpdate = now;
+  }
+  return cachedStats;
 };

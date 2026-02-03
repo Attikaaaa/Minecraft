@@ -191,3 +191,17 @@ Teszt:
 - Multiplayer teszt script bővítve: join/leave üzenet, /tp player, PvP sebzés ellenőrzés.
 - Multiplayer teszt futtatva: reports/multiplayer-2026-02-03T19-59-57-535Z/results.json (join/leave, tp, damage OK).
 - Playwright skill kliens futtatva: output/web-game-mp-latest/shot-0.png + state-0.json ellenőrizve.
+- TPS/FPS mérés: perf.js bővítve tick számlálóval + getPerfStats; main.js raw dt-t rögzít FPS-hez.
+- Debug HUD: TPS és FPS sor hozzáadva (player.js), updateGame tick számláló hívása.
+- Chat parancs: /tps (TPS kijelzés).
+- Playwright futtatva: output/web-game-tps/shot-0.png + state-0.json ellenőrizve.
+- Extra vizuális ellenőrzés: output/web-game-tps-debug/shot-0.png (F3 debug + /tps chat).
+- Halálkor auto-respawn: 500ms után respawn a respawn pointra (death screen csak villan). Playwright futtatva: output/web-game-autorespawn/shot-0.png.
+- CPU optimalizációk: debug HUD frissítés ritkítva + cache, TPS/FPS számítás csak debugnál, HUD DOM update csak változáskor.
+- Target raycast throttling (block/mob/player) 33ms + mozgás-detekció; chat fade update throttling.
+- Playwright futtatva: output/web-game-opt/shot-0.png + state-0.json ellenőrizve.
+- TPS számítás Minecraft-szerűre állítva: 20 TPS plafon, MSPT alapján (worldMs simított). /tps most MSPT-t is ír.
+- Playwright futtatva: output/web-game-tps-mc/shot-0.png + state-0.json ellenőrizve.
+- Chunk betöltés gyorsítva: adaptív budget scale (queue + speed boost), lookahead chunk prefetch, load boost state. Playwright futtatva: output/web-game-chunkfast/shot-0.png.
+- Water seam fix: mesher-worker water UV-k most world koordinátára számolnak (megegyezik main mesherrel), eltűnnek a chunk-határon lévő csíkok.
+- Víz teszt screenshotok: output/water-test-p*.png (bug), output/water-test-fixed-p*.png (fix ellenőrzés).

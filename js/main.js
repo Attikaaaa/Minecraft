@@ -108,7 +108,7 @@ import {
   updatePerfOverlay,
 } from "./perf.js";
 import { initializeAtlas, initAtlasMaterials } from "./atlas.js";
-import { blockIcons, getBlockIcons } from "./textures.js";
+import { blockIcons, getBlockIcons, updateAnimatedTextures } from "./textures.js";
 import { updateFallingBlocks } from "./physics.js";
 import { raycastVoxel } from "./raycast.js";
 import {
@@ -523,6 +523,11 @@ const playerRaycaster = new THREE.Raycaster();
 playerRaycaster.far = 3.5;
 const playerRayCenter = new THREE.Vector2(0, 0);
 const playerRayDir = new THREE.Vector3();
+const PLAYER_TARGET_UPDATE_MS = 33;
+const lastPlayerTargetCamPos = new THREE.Vector3();
+let lastPlayerTargetYaw = 0;
+let lastPlayerTargetPitch = 0;
+let lastPlayerTargetUpdate = 0;
 
 const updatePlayerTarget = () => {
   const meshes = getRemotePlayerMeshes();
@@ -530,6 +535,18 @@ const updatePlayerTarget = () => {
     state.targetedPlayer = null;
     return;
   }
+  const now = performance.now();
+  const moved =
+    lastPlayerTargetCamPos.distanceToSquared(camera.position) > 0.0004 ||
+    Math.abs(player.yaw - lastPlayerTargetYaw) > 0.0005 ||
+    Math.abs(player.pitch - lastPlayerTargetPitch) > 0.0005;
+  if (!moved && now - lastPlayerTargetUpdate < PLAYER_TARGET_UPDATE_MS) {
+    return;
+  }
+  lastPlayerTargetUpdate = now;
+  lastPlayerTargetCamPos.copy(camera.position);
+  lastPlayerTargetYaw = player.yaw;
+  lastPlayerTargetPitch = player.pitch;
   playerRaycaster.setFromCamera(playerRayCenter, camera);
   const hits = playerRaycaster.intersectObjects(meshes, true);
   if (!hits.length) {
@@ -1456,8 +1473,13 @@ const tick = (time) => {
   }
   if (!state.manualTime) {
     const now = time * 0.001;
-    const dt = Math.min(0.033, now - state.lastTime || 0.016);
+    const rawDt = now - state.lastTime || 0.016;
+    const dt = Math.min(0.033, rawDt);
     state.lastTime = now;
+    
+    // Animált textúrák frissítése (víz, láva)
+    updateAnimatedTextures(dt);
+    
     if (benchState.enabled) {
       updateBenchScenario(dt);
     }
@@ -1494,7 +1516,7 @@ const tick = (time) => {
     render();
     const renderMs = performance.now() - renderStart;
     setPerfTimings({ renderMs, worldMs, uiMs });
-    recordFrameTime(dt);
+    recordFrameTime(rawDt);
     updatePerfOverlay();
   } else {
     const renderStart = performance.now();
@@ -1595,6 +1617,22 @@ if (urlParams.get("test") === "1") {
     setBlock: (x, y, z, type) => setBlock(x, y, z, type),
     spawnItem: (id, count, x, y, z) => spawnItemDrop(id, count, x, y, z),
     teleport: (x, y, z) => teleportPlayer(x, y, z),
+    setView: (yaw, pitch) => {
+      player.yaw = yaw;
+      player.pitch = pitch;
+      camera.rotation.set(pitch, yaw, 0, "YXZ");
+    },
+    lookAt: (x, y, z) => {
+      const dx = x - camera.position.x;
+      const dy = y - camera.position.y;
+      const dz = z - camera.position.z;
+      const yaw = Math.atan2(dx, dz);
+      const dist = Math.hypot(dx, dz) || 0.0001;
+      const pitch = -Math.atan2(dy, dist);
+      player.yaw = yaw;
+      player.pitch = pitch;
+      camera.rotation.set(pitch, yaw, 0, "YXZ");
+    },
     attackPlayer: (targetId, amount = 2) => {
       if (!network.connected || !targetId) return false;
       if (network.isHost) {

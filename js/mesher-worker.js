@@ -81,7 +81,7 @@ const pushVertex = (buffers, x, y, z, nx, ny, nz, u, v, tile) => {
   buffers.vertexCount += 1;
 };
 
-const pushQuad = (buffers, origin, du, dv, normal, tile, flip, isWater) => {
+const pushQuad = (buffers, origin, du, dv, normal, tile, flip, isWater, worldPos) => {
   const [ox, oy, oz] = origin;
   const v0 = [ox, oy, oz];
   const v1 = [ox + du[0], oy + du[1], oz + du[2]];
@@ -93,13 +93,63 @@ const pushQuad = (buffers, origin, du, dv, normal, tile, flip, isWater) => {
   const base = buffers.vertexCount;
   const uLen = Math.abs(du[0] + du[1] + du[2]);
   const vLen = Math.abs(dv[0] + dv[1] + dv[2]);
-  const uMax = isWater ? 1 : uLen;
-  const vMax = isWater ? 1 : vLen;
+  const uMax = uLen;
+  const vMax = vLen;
 
-  pushVertex(buffers, v0[0], v0[1], v0[2], nx, ny, nz, 0, 0, tile);
-  pushVertex(buffers, v1[0], v1[1], v1[2], nx, ny, nz, uMax, 0, tile);
-  pushVertex(buffers, v2[0], v2[1], v2[2], nx, ny, nz, uMax, vMax, tile);
-  pushVertex(buffers, v3[0], v3[1], v3[2], nx, ny, nz, 0, vMax, tile);
+  let u0 = 0;
+  let v0val = 0;
+  let u1 = uMax;
+  let v1val = 0;
+  let u2 = uMax;
+  let v2val = vMax;
+  let u3 = 0;
+  let v3val = vMax;
+
+  if (isWater && worldPos) {
+    const [wx, wy, wz] = worldPos;
+    if (Math.abs(nx) > 0) {
+      u0 = wz + v0[2] - oz;
+      v0val = wy + v0[1] - oy;
+      u1 = wz + v1[2] - oz;
+      v1val = wy + v1[1] - oy;
+      u2 = wz + v2[2] - oz;
+      v2val = wy + v2[1] - oy;
+      u3 = wz + v3[2] - oz;
+      v3val = wy + v3[1] - oy;
+    } else if (Math.abs(ny) > 0) {
+      u0 = wx + v0[0] - ox;
+      v0val = wz + v0[2] - oz;
+      u1 = wx + v1[0] - ox;
+      v1val = wz + v1[2] - oz;
+      u2 = wx + v2[0] - ox;
+      v2val = wz + v2[2] - oz;
+      u3 = wx + v3[0] - ox;
+      v3val = wz + v3[2] - oz;
+    } else {
+      u0 = wx + v0[0] - ox;
+      v0val = wy + v0[1] - oy;
+      u1 = wx + v1[0] - ox;
+      v1val = wy + v1[1] - oy;
+      u2 = wx + v2[0] - ox;
+      v2val = wy + v2[1] - oy;
+      u3 = wx + v3[0] - ox;
+      v3val = wy + v3[1] - oy;
+    }
+  } else {
+    u0 = 0;
+    v0val = 0;
+    u1 = uMax;
+    v1val = 0;
+    u2 = uMax;
+    v2val = vMax;
+    u3 = 0;
+    v3val = vMax;
+  }
+
+  pushVertex(buffers, v0[0], v0[1], v0[2], nx, ny, nz, u0, v0val, tile);
+  pushVertex(buffers, v1[0], v1[1], v1[2], nx, ny, nz, u1, v1val, tile);
+  pushVertex(buffers, v2[0], v2[1], v2[2], nx, ny, nz, u2, v2val, tile);
+  pushVertex(buffers, v3[0], v3[1], v3[2], nx, ny, nz, u3, v3val, tile);
 
   if (!flip) {
     buffers.indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
@@ -226,12 +276,18 @@ const buildChunkMeshBuffers = (chunk, getBlockAt) => {
             d === 2 ? slice : x[2],
           ];
 
+          const worldPos = [
+            baseX + (d === 0 ? slice : x[0]),
+            d === 1 ? slice : x[1],
+            baseZ + (d === 2 ? slice : x[2]),
+          ];
+
           const normal = [0, 0, 0];
           normal[d] = side;
           const flip = side === -1;
 
           const isWater = group === GROUP_WATER;
-          pushQuad(buffersByGroup[group], origin, du, dv, normal, tile, flip, isWater);
+          pushQuad(buffersByGroup[group], origin, du, dv, normal, tile, flip, isWater, worldPos);
 
           for (let dy = 0; dy < h; dy += 1) {
             for (let dx = 0; dx < w; dx += 1) {

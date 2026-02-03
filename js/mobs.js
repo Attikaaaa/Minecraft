@@ -8,6 +8,11 @@ const mobRaycaster = new THREE.Raycaster();
 mobRaycaster.far = 3.5;
 const rayCenter = new THREE.Vector2(0, 0);
 const rayDir = new THREE.Vector3();
+const TARGET_UPDATE_MS = 33;
+const lastTargetCamPos = new THREE.Vector3();
+let lastTargetYaw = 0;
+let lastTargetPitch = 0;
+let lastTargetUpdate = 0;
 
 const mobDefs = {
   cow: {
@@ -209,6 +214,18 @@ export const updateMobTarget = (camera, state) => {
     state.targetedMob = null;
     return;
   }
+  const now = performance.now();
+  const moved =
+    lastTargetCamPos.distanceToSquared(camera.position) > 0.0004 ||
+    Math.abs(camera.rotation.y - lastTargetYaw) > 0.0005 ||
+    Math.abs(camera.rotation.x - lastTargetPitch) > 0.0005;
+  if (!moved && now - lastTargetUpdate < TARGET_UPDATE_MS) {
+    return;
+  }
+  lastTargetUpdate = now;
+  lastTargetCamPos.copy(camera.position);
+  lastTargetYaw = camera.rotation.y;
+  lastTargetPitch = camera.rotation.x;
   mobRaycaster.setFromCamera(rayCenter, camera);
   const hits = mobRaycaster.intersectObjects(mobMeshes, true);
   if (!hits.length) {

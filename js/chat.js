@@ -11,6 +11,7 @@ import { clamp, randomSeed, WORLD_MAX_HEIGHT } from "./config.js";
 import { blockDefs } from "./textures.js";
 import { isWithinWorld, setBlock } from "./world.js";
 import { getRemotePlayers } from "./remote-players.js";
+import { getPerfStats } from "./perf.js";
 
 const chatEl = document.getElementById("chat");
 const chatMessagesEl = document.getElementById("chat-messages");
@@ -295,6 +296,12 @@ registerCommand("give", "Item adása", "/give <item> [count]", (args) => {
   } else {
     addChatMessage(`Adva: ${id} x${count}`, "system");
   }
+});
+
+registerCommand("tps", "Tick sebesség", "/tps", () => {
+  const stats = getPerfStats();
+  const mspt = Number.isFinite(stats.mspt) ? stats.mspt.toFixed(1) : "n/a";
+  addChatMessage(`TPS: ${stats.tps.toFixed(1)} (MSPT: ${mspt}ms)`, "system");
 });
 
 registerCommand("tp", "Teleport", "/tp <x> <y> <z> | /tp <player>", (args) => {
@@ -585,6 +592,10 @@ chatInputEl?.addEventListener("input", () => {
 
 export const updateChatDisplay = () => {
   if (!chatMessagesEl) return;
+  if (messages.length === 0) return;
+  const nowMs = performance.now();
+  if (nowMs - updateChatDisplay.lastUpdate < 100) return;
+  updateChatDisplay.lastUpdate = nowMs;
   const now = performance.now() / 1000;
   const isOpen = state.chatOpen;
   for (const msg of messages) {
@@ -598,6 +609,8 @@ export const updateChatDisplay = () => {
     msg.el.style.opacity = String(alpha);
   }
 };
+
+updateChatDisplay.lastUpdate = 0;
 
 window.addEventListener("keydown", (event) => {
   if (state.chatOpen || state.inventoryOpen || state.craftingTableOpen) return;
