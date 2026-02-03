@@ -1,19 +1,37 @@
 import { THREE, scene } from "./scene.js";
-import { CHUNK_RADIUS, CHUNK_SIZE, SEA_LEVEL, WORLD_MAX_HEIGHT, clamp, randomSeed, urlParams } from "./config.js";
+import {
+  CHUNK_RADIUS,
+  CHUNK_SIZE,
+  SEA_LEVEL,
+  VIEW_RADIUS_MAX,
+  VIEW_RADIUS_MIN,
+  VIEW_RADIUS_UNLIMITED,
+  WORLD_MAX_HEIGHT,
+  clamp,
+  randomSeed,
+  urlParams,
+} from "./config.js";
 import { noise2D, noise3D, hash2, hash3, smoothstep } from "./noise.js";
 import { blockDefs } from "./textures.js";
 import { atlasMaterials, blockFaceTiles, blockRenderGroups, blockMapFaces } from "./atlas.js";
 import { buildChunkMeshBuffers } from "./mesher.js";
-import { buildCustomBlocksForChunk, clearCustomBlocksForChunk } from "./custom-blocks.js";
+import { buildCustomBlocksForChunk, clearCustomBlocksForChunk, getTorchOrientation } from "./custom-blocks.js";
 import { state } from "./state.js";
 import { createWaterSystem } from "./water.js";
+import { network, sendBlockUpdates } from "./network.js";
 
 export const chunks = new Map();
+const testMode = urlParams.get("test") === "1";
 
 export const keyFor = (x, y, z) => `${x},${y},${z}`;
 const chunkKey = (cx, cz) => `${cx},${cz}`;
 
 const blocksPerChunk = CHUNK_SIZE * CHUNK_SIZE * WORLD_MAX_HEIGHT;
+
+const getViewRadius = () => {
+  const max = state.unlimitedViewDistance ? VIEW_RADIUS_UNLIMITED : VIEW_RADIUS_MAX;
+  return clamp(Math.round(state.viewRadius ?? CHUNK_RADIUS), VIEW_RADIUS_MIN, max);
+};
 
 const createQueue = () => ({ items: [], head: 0 });
 const enqueue = (queue, item) => {
@@ -380,6 +398,21 @@ const applyBuffersToMesh = (chunk, key, buffers, material) => {
     return;
   }
 
+  if (testMode && typeof window !== "undefined") {
+    window.__LAST_MESH_UPLOAD = {
+      chunk: chunk.key,
+      group: key,
+      vertexCount: buffers.vertexCount,
+      positionsType: buffers.positions?.constructor?.name || null,
+      normalsType: buffers.normals?.constructor?.name || null,
+      uvsType: buffers.uvs?.constructor?.name || null,
+      tilesType: buffers.tiles?.constructor?.name || null,
+      indicesType: buffers.indices?.constructor?.name || null,
+      positionsLength: buffers.positions?.length ?? null,
+      indicesLength: buffers.indices?.length ?? null,
+    };
+  }
+
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(buffers.positions, 3));
   geometry.setAttribute("normal", new THREE.Float32BufferAttribute(buffers.normals, 3));
@@ -626,15 +659,23 @@ const drainMeshApplyQueue = (budgetMs) => {
 
 export const ensureChunksAround = (x, z) => {
   const { cx, cz } = worldToChunk(x, z);
-  if (state.currentChunkX === cx && state.currentChunkZ === cz) return;
+  const radius = getViewRadius();
+  if (
+    state.currentChunkX === cx &&
+    state.currentChunkZ === cz &&
+    state.currentViewRadius === radius
+  ) {
+    return;
+  }
   state.currentChunkX = cx;
   state.currentChunkZ = cz;
+  state.currentViewRadius = radius;
 
   const genCandidates = [];
   const meshCandidates = [];
   const needed = new Set();
-  for (let dx = -CHUNK_RADIUS; dx <= CHUNK_RADIUS; dx += 1) {
-    for (let dz = -CHUNK_RADIUS; dz <= CHUNK_RADIUS; dz += 1) {
+  for (let dx = -radius; dx <= radius; dx += 1) {
+    for (let dz = -radius; dz <= radius; dz += 1) {
       const nx = cx + dx;
       const nz = cz + dz;
       const key = chunkKey(nx, nz);
@@ -655,10 +696,12 @@ export const ensureChunksAround = (x, z) => {
     enqueue(meshQueue, chunk);
   });
 
-  for (const [key, chunk] of chunks) {
-    if (!needed.has(key)) {
-      chunk.shouldBeLoaded = false;
-      if (chunk.loaded) unloadChunk(chunk);
+  if (!state.unlimitedViewDistance) {
+    for (const [key, chunk] of chunks) {
+      if (!needed.has(key)) {
+        chunk.shouldBeLoaded = false;
+        if (chunk.loaded) unloadChunk(chunk);
+      }
     }
   }
 };
@@ -704,9 +747,13 @@ export const updateWorld = () => {
   }
 
   if (waterSystem) {
-    const waterStart = performance.now();
-    waterSystem.update(1.25, 220);
-    worldTimings.waterMs = performance.now() - waterStart;
+    if (!state.multiplayer.enabled || state.multiplayer.isHost) {
+      const waterStart = performance.now();
+      waterSystem.update(1.25, 220);
+      worldTimings.waterMs = performance.now() - waterStart;
+    } else {
+      worldTimings.waterMs = 0;
+    }
   } else {
     worldTimings.waterMs = 0;
   }
@@ -737,6 +784,22 @@ export const setBlock = (x, y, z, type, options = {}) => {
   // Falling block fizika (Minecraft mechanika)
   if (!options.skipPhysics) {
     checkNeighborFalling(x, y, z);
+  }
+
+  if (!options.skipBroadcast && !options.remote && network.connected) {
+    const isWaterUpdate = options.source === "water";
+    const isPhysicsUpdate = options.source === "physics";
+    if ((isWaterUpdate || isPhysicsUpdate) && !network.isHost) {
+      return true;
+    }
+    const update = {
+      key: keyFor(x, y, z),
+      type,
+      waterLevel: type === 8 ? options.waterLevel ?? getWaterLevel(x, y, z) : null,
+      torchOrientation:
+        type === 18 ? options.torchOrientation ?? getTorchOrientation(x, y, z) : null,
+    };
+    sendBlockUpdates([update]);
   }
   
   return true;

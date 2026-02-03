@@ -1,0 +1,62 @@
+{
+  "room": "NUNJG",
+  "hostId": "1",
+  "clientId": "2",
+  "playerSync": {
+    "hostMovedTo": {
+      "x": 0.5,
+      "y": 19,
+      "z": 0.5,
+      "yaw": 0,
+      "pitch": 0,
+      "onGround": true,
+      "health": 20,
+      "hunger": 20,
+      "velocity": {
+        "x": 0,
+        "y": -0.03,
+        "z": 0
+      }
+    },
+    "clientSeesPlayers": []
+  },
+  "blockSync": {
+    "hostPlaced": {
+      "pos": {
+        "x": 2,
+        "y": 18,
+        "z": 0
+      },
+      "type": 2,
+      "clientSaw": 3
+    },
+    "clientPlaced": {
+      "pos": {
+        "x": 3,
+        "y": 22,
+        "z": 0
+      },
+      "type": 3,
+      "hostSaw": 3
+    }
+  },
+  "timeSync": {
+    "clientTime": 0.25
+  },
+  "mobSync": [],
+  "itemSync": {
+    "clientItemsAfterSpawn": [],
+    "hostItemsAfterPickup": [
+      {
+        "entityId": 1,
+        "id": "plank",
+        "count": 1,
+        "x": 1,
+        "y": 23.52,
+        "z": 1
+      }
+    ]
+  },
+  "chatSync": [],
+  "disconnect": []
+}

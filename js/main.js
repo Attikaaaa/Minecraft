@@ -4,6 +4,9 @@ import {
   CHUNK_SIZE,
   CHUNK_RADIUS,
   SEA_LEVEL,
+  VIEW_RADIUS_MAX,
+  VIEW_RADIUS_MIN,
+  VIEW_RADIUS_UNLIMITED,
   WORLD_MAX_HEIGHT,
   clamp,
   randomSeed,
@@ -23,7 +26,14 @@ import {
   tableCraftSlots,
   updateAllSlotsUI,
 } from "./inventory.js";
-import { itemEntities, updateItemEntities } from "./entities.js";
+import {
+  clearItemEntities,
+  itemEntities,
+  removeItemEntityById,
+  spawnItemDrop,
+  syncItemEntities,
+  updateItemEntities,
+} from "./entities.js";
 import { killPlayer, player, placeBlock, resetMining, teleportPlayer, tryConsumeFood, updateGame } from "./player.js";
 import { getBlock, initializeWorld, isWithinWorld, setBlock, spawn } from "./world.js";
 import {
@@ -36,23 +46,45 @@ import {
   optionsDebugBtn,
   optionsFovEl,
   optionsFovValueEl,
+  optionsUnlimitedViewBtn,
+  optionsViewDistanceEl,
+  optionsViewDistanceValueEl,
   optionsFullscreenBtn,
   optionsMenuEl,
   optionsPerfBtn,
   optionsSensitivityEl,
   optionsSensitivityValueEl,
   pauseMenuEl,
+  pauseMultiplayerBtn,
   pauseOptionsBtn,
   pauseQuitBtn,
   pauseResumeBtn,
   startBtn,
   statusEl,
+  multiplayerMenuEl,
+  mpNameInput,
+  mpServerInput,
+  mpRoomInput,
+  mpHostBtn,
+  mpJoinBtn,
+  mpDisconnectBtn,
+  mpCloseBtn,
+  mpStatusEl,
+  mpLinkEl,
 } from "./dom.js";
 import { lockPointer, unlockPointer } from "./controls.js";
-import { attackMob, spawnInitialMobs, spawnMob, updateMobTarget, updateMobs } from "./mobs.js";
+import {
+  attackMob,
+  clearMobs,
+  spawnInitialMobs,
+  spawnMob,
+  syncMobs,
+  updateMobTarget,
+  updateMobs,
+} from "./mobs.js";
 import { itemDefs, refreshItemIcons } from "./items.js";
 import { getMobs } from "./mobs.js";
-import { closeChat, isChatOpen, openChat, updateChatDisplay } from "./chat.js";
+import { addChatMessage, closeChat, isChatOpen, openChat, updateChatDisplay } from "./chat.js";
 import { setTimeOfDay } from "./time.js";
 import { advanceTime, initTime } from "./time.js";
 import {
@@ -67,6 +99,15 @@ import {
 import { initializeAtlas, initAtlasMaterials } from "./atlas.js";
 import { blockIcons, getBlockIcons } from "./textures.js";
 import { updateFallingBlocks } from "./physics.js";
+import { network, connect, disconnect, sendAction, sendEntities, sendPlayerState, setNetworkHandlers } from "./network.js";
+import {
+  upsertRemotePlayer,
+  removeRemotePlayer,
+  updateRemotePlayers,
+  clearRemotePlayers,
+  getRemotePlayers,
+} from "./remote-players.js";
+import { removeTorchOrientation, setTorchOrientation } from "./custom-blocks.js";
 
 const resize = () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -96,6 +137,24 @@ const MAX_FOV = 110;
 
 const formatSensitivity = (value) => `${value.toFixed(2)}x`;
 const formatFov = (value) => `${Math.round(value)}°`;
+const formatViewRadius = (value) => `${Math.round(value)} chunk`;
+
+const updateFogDistance = () => {
+  if (!scene.fog) return;
+  const maxRadius = state.unlimitedViewDistance ? VIEW_RADIUS_UNLIMITED : VIEW_RADIUS_MAX;
+  const radius = clamp(Math.round(state.viewRadius ?? CHUNK_RADIUS), VIEW_RADIUS_MIN, maxRadius);
+  const far = state.unlimitedViewDistance
+    ? Math.max(800, CHUNK_SIZE * (radius + 1) * 2.8)
+    : Math.max(40, CHUNK_SIZE * (radius + 1) * 1.2);
+  const near = Math.max(6, far * 0.4);
+  scene.fog.near = near;
+  scene.fog.far = far;
+  const cameraFar = Math.max(200, far + CHUNK_SIZE * 2);
+  if (camera.far !== cameraFar) {
+    camera.far = cameraFar;
+    camera.updateProjectionMatrix();
+  }
+};
 
 const syncDebugHudVisibility = () => {
   if (!statusEl) return;
@@ -117,6 +176,20 @@ const updateOptionsUI = () => {
   if (optionsFovValueEl) {
     optionsFovValueEl.textContent = formatFov(state.fov);
   }
+  if (optionsViewDistanceEl) {
+    const maxRadius = state.unlimitedViewDistance ? VIEW_RADIUS_UNLIMITED : VIEW_RADIUS_MAX;
+    optionsViewDistanceEl.max = String(maxRadius);
+    optionsViewDistanceEl.value = String(Math.round(state.viewRadius));
+    optionsViewDistanceEl.disabled = state.unlimitedViewDistance;
+  }
+  if (optionsViewDistanceValueEl) {
+    optionsViewDistanceValueEl.textContent = state.unlimitedViewDistance
+      ? "∞"
+      : formatViewRadius(state.viewRadius);
+  }
+  if (optionsUnlimitedViewBtn) {
+    optionsUnlimitedViewBtn.textContent = `Végtelen látótáv: ${state.unlimitedViewDistance ? "Be" : "Ki"}`;
+  }
   if (optionsDebugBtn) {
     optionsDebugBtn.textContent = `Debug HUD: ${state.debugHud ? "Be" : "Ki"}`;
   }
@@ -134,6 +207,8 @@ const saveSettings = () => {
     const payload = {
       sensitivity: state.mouseSensitivity,
       fov: state.fov,
+      viewRadius: state.viewRadius,
+      unlimitedViewDistance: state.unlimitedViewDistance,
       debugHud: state.debugHud,
       perfOverlay: isPerfOverlayEnabled(),
     };
@@ -146,11 +221,24 @@ const saveSettings = () => {
 const applySettings = (settings) => {
   const nextSensitivity = clamp(Number(settings?.sensitivity ?? state.mouseSensitivity), MIN_SENSITIVITY, MAX_SENSITIVITY);
   const nextFov = clamp(Number(settings?.fov ?? state.fov ?? camera.fov), MIN_FOV, MAX_FOV);
+  const unlimited = Boolean(settings?.unlimitedViewDistance ?? state.unlimitedViewDistance);
+  const maxRadius = unlimited ? VIEW_RADIUS_UNLIMITED : VIEW_RADIUS_MAX;
+  const nextViewRadius = clamp(
+    Number(settings?.viewRadius ?? state.viewRadius ?? CHUNK_RADIUS),
+    VIEW_RADIUS_MIN,
+    maxRadius
+  );
   state.mouseSensitivity = Number.isFinite(nextSensitivity) ? nextSensitivity : 1;
   state.fov = Number.isFinite(nextFov) ? nextFov : camera.fov;
+  state.viewRadius = Number.isFinite(nextViewRadius) ? Math.round(nextViewRadius) : CHUNK_RADIUS;
+  state.unlimitedViewDistance = unlimited;
   state.debugHud = Boolean(settings?.debugHud ?? state.debugHud);
   camera.fov = state.fov;
   camera.updateProjectionMatrix();
+  updateFogDistance();
+  state.currentChunkX = null;
+  state.currentChunkZ = null;
+  state.currentViewRadius = null;
   if (settings && Object.prototype.hasOwnProperty.call(settings, "perfOverlay")) {
     setPerfOverlayEnabled(Boolean(settings.perfOverlay));
   }
@@ -162,6 +250,8 @@ const loadSettings = () => {
   const defaults = {
     sensitivity: state.mouseSensitivity,
     fov: state.fov,
+    viewRadius: state.viewRadius,
+    unlimitedViewDistance: state.unlimitedViewDistance,
     debugHud: state.debugHud,
     perfOverlay: false,
   };
@@ -180,6 +270,177 @@ const loadSettings = () => {
   applySettings(next);
 };
 
+const MULTIPLAYER_SETTINGS_KEY = "blockland_multiplayer_v1";
+
+const loadMultiplayerSettings = () => {
+  const defaults = {
+    name: state.multiplayer.name,
+    serverUrl: state.multiplayer.serverUrl,
+  };
+  let settings = defaults;
+  try {
+    const raw = localStorage.getItem(MULTIPLAYER_SETTINGS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        settings = { ...defaults, ...parsed };
+      }
+    }
+  } catch (err) {
+    settings = defaults;
+  }
+  state.multiplayer.name = settings.name || state.multiplayer.name;
+  state.multiplayer.serverUrl = settings.serverUrl || state.multiplayer.serverUrl;
+};
+
+const saveMultiplayerSettings = () => {
+  try {
+    const payload = {
+      name: state.multiplayer.name,
+      serverUrl: state.multiplayer.serverUrl,
+    };
+    localStorage.setItem(MULTIPLAYER_SETTINGS_KEY, JSON.stringify(payload));
+  } catch (err) {
+    // ignore
+  }
+};
+
+const buildJoinLink = (room, seed) => {
+  if (!room || seed == null) return "";
+  const url = new URL(window.location.href);
+  url.searchParams.set("room", room);
+  url.searchParams.set("seed", String(seed));
+  return url.toString();
+};
+
+const updateMultiplayerUI = () => {
+  if (mpNameInput) mpNameInput.value = state.multiplayer.name;
+  if (mpServerInput) mpServerInput.value = state.multiplayer.serverUrl;
+  if (mpRoomInput && state.multiplayer.room) mpRoomInput.value = state.multiplayer.room;
+
+  if (mpDisconnectBtn) {
+    mpDisconnectBtn.classList.toggle("hidden", !state.multiplayer.connected);
+  }
+
+  if (mpStatusEl) {
+    if (state.multiplayer.connected) {
+      mpStatusEl.textContent = `Kapcsolódva: ${state.multiplayer.room} · ${state.multiplayer.isHost ? "Host" : "Client"}`;
+    } else if (network.connecting) {
+      mpStatusEl.textContent = "Kapcsolódás...";
+    } else {
+      mpStatusEl.textContent = "Nincs kapcsolat.";
+    }
+  }
+
+  if (mpLinkEl) {
+    if (state.multiplayer.connected) {
+      const link = buildJoinLink(state.multiplayer.room, network.seed ?? randomSeed);
+      mpLinkEl.textContent = link ? `Meghívó link: ${link}` : "";
+      mpLinkEl.classList.toggle("hidden", !link);
+    } else {
+      mpLinkEl.textContent = "";
+      mpLinkEl.classList.add("hidden");
+    }
+  }
+};
+
+const openMultiplayerMenu = () => {
+  if (!multiplayerMenuEl) return;
+  multiplayerMenuEl.classList.remove("hidden");
+  unlockPointer();
+  updateMultiplayerUI();
+  if (mpNameInput) mpNameInput.focus();
+};
+
+const closeMultiplayerMenu = () => {
+  if (!multiplayerMenuEl) return;
+  multiplayerMenuEl.classList.add("hidden");
+  if (state.mode === "playing") lockPointer();
+};
+
+const applyMultiplayerState = (payload) => {
+  state.multiplayer.connected = true;
+  state.multiplayer.enabled = true;
+  state.multiplayer.isHost = network.isHost;
+  state.multiplayer.room = payload.room;
+};
+
+const setMultiplayerStatus = (text) => {
+  if (mpStatusEl) mpStatusEl.textContent = text;
+};
+
+const startMultiplayerConnection = (isHost) => {
+  const name = mpNameInput?.value?.trim() || state.multiplayer.name || "Player";
+  const serverUrl = mpServerInput?.value?.trim() || state.multiplayer.serverUrl;
+  const room = mpRoomInput?.value?.trim().toUpperCase() || null;
+  if (!serverUrl) {
+    setMultiplayerStatus("Adj meg szerver címet.");
+    return;
+  }
+  if (!isHost && !room) {
+    setMultiplayerStatus("Add meg a szoba kódot.");
+    return;
+  }
+  state.multiplayer.name = name;
+  state.multiplayer.serverUrl = serverUrl;
+  saveMultiplayerSettings();
+  connect({ url: serverUrl, room, name, isHost, seed: randomSeed });
+  updateMultiplayerUI();
+};
+
+const stopMultiplayerConnection = () => {
+  disconnect();
+  state.multiplayer.connected = false;
+  state.multiplayer.enabled = false;
+  state.multiplayer.isHost = false;
+  state.multiplayer.room = null;
+  clearRemotePlayers();
+  updateMultiplayerUI();
+};
+
+const applyBlockUpdates = (updates) => {
+  if (!Array.isArray(updates)) return;
+  for (const update of updates) {
+    if (!update || typeof update.key !== "string") continue;
+    const [sx, sy, sz] = update.key.split(",");
+    const x = Number(sx);
+    const y = Number(sy);
+    const z = Number(sz);
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
+    const type = update.type ?? 0;
+    if (type === 18 && update.torchOrientation) {
+      setTorchOrientation(x, y, z, update.torchOrientation);
+    } else if (type !== 18) {
+      removeTorchOrientation(x, y, z);
+    }
+    const allowSim = state.multiplayer.isHost;
+    setBlock(x, y, z, type, {
+      remote: true,
+      skipBroadcast: true,
+      skipWater: !allowSim,
+      skipPhysics: !allowSim,
+      waterLevel: update.waterLevel ?? null,
+      torchOrientation: update.torchOrientation ?? null,
+    });
+  }
+};
+
+const applySnapshot = (snapshot) => {
+  if (!snapshot) return;
+  if (Array.isArray(snapshot.blocks)) applyBlockUpdates(snapshot.blocks);
+  if (Array.isArray(snapshot.mobs)) syncMobs(snapshot.mobs);
+  if (Array.isArray(snapshot.items)) syncItemEntities(snapshot.items);
+  if (Number.isFinite(snapshot.timeOfDay)) {
+    setTimeOfDay(snapshot.timeOfDay);
+  }
+  if (Array.isArray(snapshot.players)) {
+    for (const playerState of snapshot.players) {
+      if (!playerState || playerState.id === network.clientId) continue;
+      upsertRemotePlayer(playerState);
+    }
+  }
+};
+
 const resetInputState = () => {
   input.forward = false;
   input.backward = false;
@@ -193,6 +454,61 @@ const resetInputState = () => {
   input.jumping = false;
   input.lastWPress = 0;
   resetMining();
+};
+
+let lastPlayerStateSent = 0;
+let lastEntitiesSent = 0;
+let pendingSnapshot = null;
+
+const buildPlayerStatePayload = () => {
+  const selected = hotbar[state.selectedHotbar];
+  return {
+    x: Number(player.position.x.toFixed(3)),
+    y: Number(player.position.y.toFixed(3)),
+    z: Number(player.position.z.toFixed(3)),
+    yaw: Number(player.yaw.toFixed(3)),
+    pitch: Number(player.pitch.toFixed(3)),
+    vx: Number(player.velocity.x.toFixed(3)),
+    vy: Number(player.velocity.y.toFixed(3)),
+    vz: Number(player.velocity.z.toFixed(3)),
+    heldItem: selected?.id || null,
+    gamemode: state.gamemode,
+    health: player.health,
+    hunger: player.hunger,
+  };
+};
+
+const sendNetworkUpdates = (now) => {
+  if (!network.connected) return;
+  if (now - lastPlayerStateSent > 0.05) {
+    lastPlayerStateSent = now;
+    sendPlayerState(buildPlayerStatePayload());
+  }
+  if (network.isHost && now - lastEntitiesSent > 0.2) {
+    lastEntitiesSent = now;
+    const mobsPayload = getMobs().map((mob) => ({
+      id: mob.id,
+      type: mob.type,
+      x: Number(mob.position.x.toFixed(3)),
+      y: Number(mob.position.y.toFixed(3)),
+      z: Number(mob.position.z.toFixed(3)),
+      yaw: Number(mob.yaw.toFixed(3)),
+      health: mob.health,
+    }));
+    const itemsPayload = itemEntities.map((entity) => ({
+      entityId: entity.entityId,
+      id: entity.id,
+      count: entity.count,
+      x: Number(entity.position.x.toFixed(3)),
+      y: Number(entity.position.y.toFixed(3)),
+      z: Number(entity.position.z.toFixed(3)),
+    }));
+    sendEntities({
+      timeOfDay: Number(state.timeOfDay.toFixed(3)),
+      mobs: mobsPayload,
+      items: itemsPayload,
+    });
+  }
 };
 
 const setHudVisible = (visible) => {
@@ -273,6 +589,11 @@ const togglePerfOverlayWithSave = () => {
 const BENCH_DURATION_MS = 30000;
 const BENCH_SPAM_INTERVAL_MS = 100;
 const BENCH_BLOCK_TYPE = 11;
+const testMode = urlParams.get("test") === "1";
+
+if (testMode && typeof window !== "undefined") {
+  window.__RAF_TICKS = 0;
+}
 
 const normalizeBenchScenario = (value) => {
   if (!value) return "A";
@@ -444,6 +765,19 @@ const applyDebugState = () => {
 };
 
 loadSettings();
+loadMultiplayerSettings();
+if (!state.multiplayer.serverUrl || state.multiplayer.serverUrl === "ws://localhost:8080") {
+  if (window.location.host) {
+    const proto = window.location.protocol === "https:" ? "wss" : "ws";
+    state.multiplayer.serverUrl = `${proto}://${window.location.host}`;
+  }
+}
+updateMultiplayerUI();
+const autoRoom = urlParams.get("room");
+if (autoRoom) {
+  if (mpRoomInput) mpRoomInput.value = autoRoom;
+  startMultiplayerConnection(false);
+}
 
 optionsSensitivityEl?.addEventListener("input", (event) => {
   const value = Number(event.target.value);
@@ -459,6 +793,34 @@ optionsFovEl?.addEventListener("input", (event) => {
   state.fov = clamp(value, MIN_FOV, MAX_FOV);
   camera.fov = state.fov;
   camera.updateProjectionMatrix();
+  saveSettings();
+  updateOptionsUI();
+});
+
+optionsViewDistanceEl?.addEventListener("input", (event) => {
+  const value = Number(event.target.value);
+  if (!Number.isFinite(value)) return;
+  const maxRadius = state.unlimitedViewDistance ? VIEW_RADIUS_UNLIMITED : VIEW_RADIUS_MAX;
+  state.viewRadius = clamp(Math.round(value), VIEW_RADIUS_MIN, maxRadius);
+  updateFogDistance();
+  state.currentChunkX = null;
+  state.currentChunkZ = null;
+  state.currentViewRadius = null;
+  saveSettings();
+  updateOptionsUI();
+});
+
+optionsUnlimitedViewBtn?.addEventListener("click", () => {
+  state.unlimitedViewDistance = !state.unlimitedViewDistance;
+  if (state.unlimitedViewDistance) {
+    state.viewRadius = Math.max(state.viewRadius, VIEW_RADIUS_UNLIMITED);
+  } else if (state.viewRadius > VIEW_RADIUS_MAX) {
+    state.viewRadius = VIEW_RADIUS_MAX;
+  }
+  updateFogDistance();
+  state.currentChunkX = null;
+  state.currentChunkZ = null;
+  state.currentViewRadius = null;
   saveSettings();
   updateOptionsUI();
 });
@@ -479,8 +841,28 @@ optionsBackBtn?.addEventListener("click", () => {
   closeOptionsMenu();
 });
 
+mpHostBtn?.addEventListener("click", () => {
+  startMultiplayerConnection(true);
+});
+
+mpJoinBtn?.addEventListener("click", () => {
+  startMultiplayerConnection(false);
+});
+
+mpDisconnectBtn?.addEventListener("click", () => {
+  stopMultiplayerConnection();
+});
+
+mpCloseBtn?.addEventListener("click", () => {
+  closeMultiplayerMenu();
+});
+
 pauseResumeBtn?.addEventListener("click", () => {
   closePauseMenu();
+});
+
+pauseMultiplayerBtn?.addEventListener("click", () => {
+  openMultiplayerMenu();
 });
 
 pauseOptionsBtn?.addEventListener("click", () => {
@@ -503,6 +885,97 @@ document.addEventListener("fullscreenchange", () => {
   updateOptionsUI();
 });
 
+setNetworkHandlers({
+  onWelcome: (payload) => {
+    applyMultiplayerState(payload);
+    if (mpRoomInput) mpRoomInput.value = payload.room || "";
+    if (!network.isHost) {
+      clearMobs();
+      clearItemEntities();
+    }
+    clearRemotePlayers();
+    if (state.worldInitialized) {
+      applySnapshot(payload.snapshot);
+    } else {
+      pendingSnapshot = payload.snapshot;
+    }
+    if (payload.seed !== randomSeed) {
+      const link = buildJoinLink(payload.room, payload.seed);
+      setMultiplayerStatus("Seed eltérés! Nyisd meg a meghívó linket.");
+      if (mpLinkEl && link) {
+        mpLinkEl.textContent = `Meghívó link: ${link}`;
+        mpLinkEl.classList.remove("hidden");
+      }
+    }
+    updateMultiplayerUI();
+  },
+  onPlayerState: (payload) => {
+    if (!payload || payload.id === network.clientId) return;
+    upsertRemotePlayer(payload);
+  },
+  onPlayerLeave: (payload) => {
+    if (!payload) return;
+    removeRemotePlayer(payload.id);
+  },
+  onBlockUpdate: (payload) => {
+    if (!payload || payload.sourceId === network.clientId) return;
+    applyBlockUpdates(payload.updates);
+  },
+  onEntities: (payload) => {
+    if (network.isHost) return;
+    if (Array.isArray(payload.mobs)) syncMobs(payload.mobs);
+    if (Array.isArray(payload.items)) syncItemEntities(payload.items);
+    if (Number.isFinite(payload.timeOfDay)) setTimeOfDay(payload.timeOfDay);
+  },
+  onChat: (payload) => {
+    if (!payload || payload.id === network.clientId) return;
+    addChatMessage(`${payload.name}: ${payload.text}`, "player");
+  },
+  onHostChange: () => {
+    state.multiplayer.isHost = network.isHost;
+    updateMultiplayerUI();
+  },
+  onDisconnect: () => {
+    state.multiplayer.connected = false;
+    state.multiplayer.enabled = false;
+    state.multiplayer.isHost = false;
+    state.multiplayer.room = null;
+    clearRemotePlayers();
+    updateMultiplayerUI();
+  },
+  onError: (err) => {
+    if (err?.message) setMultiplayerStatus(err.message);
+  },
+  onAction: (payload) => {
+    if (!network.isHost) return;
+    const action = payload?.action;
+    if (!action || !action.kind) return;
+    if (action.kind === "attack_mob") {
+      const mob = getMobs().find((m) => m.id === action.mobId);
+      if (mob) attackMob(mob, action.damage ?? 2);
+      return;
+    }
+    if (action.kind === "spawn_mob") {
+      if (!action.type || !action.position) return;
+      const pos = new THREE.Vector3(action.position.x, action.position.y, action.position.z);
+      spawnMob(action.type, pos);
+      return;
+    }
+    if (action.kind === "set_time") {
+      if (!Number.isFinite(action.value)) return;
+      setTimeOfDay(action.value);
+      return;
+    }
+    if (action.kind === "item_pickup") {
+      if (action.entityId == null) return;
+      const entityId = Number(action.entityId);
+      if (Number.isFinite(entityId)) {
+        removeItemEntityById(entityId);
+      }
+    }
+  },
+});
+
 const startGame = async () => {
   // Textúrák és atlas betöltése
   console.log("Atlas inicializálása...");
@@ -520,7 +993,13 @@ const startGame = async () => {
   setHudVisible(true);
   lockPointer();
   updateAllSlotsUI();
-  spawnInitialMobs(player.position);
+  if (!state.multiplayer.enabled || state.multiplayer.isHost) {
+    spawnInitialMobs(player.position);
+  }
+  if (pendingSnapshot) {
+    applySnapshot(pendingSnapshot);
+    pendingSnapshot = null;
+  }
   applyDebugState();
 };
 
@@ -670,7 +1149,11 @@ window.addEventListener("mousedown", (event) => {
   if (state.gamemode === "spectator") return;
   if (event.button === 0) {
     if (state.targetedMob) {
-      attackMob(state.targetedMob);
+      if (network.connected && !network.isHost) {
+        sendAction({ kind: "attack_mob", mobId: state.targetedMob.id, damage: 2 });
+      } else {
+        attackMob(state.targetedMob);
+      }
       return;
     }
     input.mining = true;
@@ -690,15 +1173,22 @@ window.addEventListener("mousedown", (event) => {
       const baseY = state.targetedBlock ? state.targetedBlock.y + 1 : player.position.y + 0.5;
       const baseZ = state.targetedBlock ? state.targetedBlock.z + 0.5 : player.position.z + Math.cos(player.yaw) * 1.5;
       const spawnPos = new THREE.Vector3(baseX, baseY, baseZ);
-      const mob = spawnMob(spawnType, spawnPos);
-      if (mob) {
-        if (state.gamemode !== "creative") {
-          selected.count -= 1;
-          if (selected.count <= 0) {
-            setSlot(selected, null, 0);
-          }
-          updateAllSlotsUI();
+      if (network.connected && !network.isHost) {
+        sendAction({
+          kind: "spawn_mob",
+          type: spawnType,
+          position: { x: spawnPos.x, y: spawnPos.y, z: spawnPos.z },
+        });
+      } else {
+        const mob = spawnMob(spawnType, spawnPos);
+        if (!mob) return;
+      }
+      if (state.gamemode !== "creative") {
+        selected.count -= 1;
+        if (selected.count <= 0) {
+          setSlot(selected, null, 0);
         }
+        updateAllSlotsUI();
       }
       return;
     }
@@ -719,6 +1209,9 @@ const render = () => {
 };
 
 const tick = (time) => {
+  if (testMode && typeof window !== "undefined") {
+    window.__RAF_TICKS = (window.__RAF_TICKS || 0) + 1;
+  }
   if (!state.manualTime) {
     const now = time * 0.001;
     const dt = Math.min(0.033, now - state.lastTime || 0.016);
@@ -729,13 +1222,26 @@ const tick = (time) => {
     const worldStart = performance.now();
     let uiMs = 0;
     if (state.mode === "playing") {
-      advanceTime(dt);
+      const isHostSim = !state.multiplayer.enabled || state.multiplayer.isHost;
+      if (isHostSim) advanceTime(dt);
       updateMobTarget(camera, state);
       const gameTimings = updateGame(dt);
       uiMs = gameTimings?.uiMs ?? 0;
-      updateMobs(dt);
-      updateFallingBlocks(dt); // Minecraft fizika: falling blocks
-      updateItemEntities(dt, now, player, state.gamemode !== "spectator");
+      if (isHostSim) {
+        updateMobs(dt);
+        updateFallingBlocks(dt); // Minecraft fizika: falling blocks
+      }
+      updateItemEntities(dt, now, player, state.gamemode !== "spectator", {
+        simulatePhysics: isHostSim,
+        allowCleanup: isHostSim,
+        onPickup: (entity) => {
+          if (network.connected && !network.isHost) {
+            sendAction({ kind: "item_pickup", entityId: entity.entityId });
+          }
+        },
+      });
+      updateRemotePlayers(dt);
+      sendNetworkUpdates(now);
     }
     const worldMs = performance.now() - worldStart;
     const uiStart = performance.now();
@@ -768,6 +1274,10 @@ window.render_game_to_text = () => {
     settings: {
       sensitivity: Number(state.mouseSensitivity.toFixed(2)),
       fov: Number(state.fov.toFixed(1)),
+      viewRadius: state.viewRadius,
+      unlimitedViewDistance: state.unlimitedViewDistance,
+      movementSpeed: Number(state.movementSpeed.toFixed(2)),
+      flySpeed: Number(state.flySpeed.toFixed(2)),
     },
     coordSystem: "origin (0,0,0) at world corner; +x east, +y up, +z south",
     player: {
@@ -794,7 +1304,7 @@ window.render_game_to_text = () => {
       ? { x: Number(state.respawnPoint.x.toFixed(2)), y: Number(state.respawnPoint.y.toFixed(2)), z: Number(state.respawnPoint.z.toFixed(2)) }
       : null,
     blocks: state.blocks,
-    worldSize: { chunkSize: CHUNK_SIZE, height: WORLD_MAX_HEIGHT, viewRadius: CHUNK_RADIUS },
+    worldSize: { chunkSize: CHUNK_SIZE, height: WORLD_MAX_HEIGHT, viewRadius: state.viewRadius },
     seaLevel: SEA_LEVEL,
     seed: randomSeed,
     timeOfDay: Number(state.timeOfDay.toFixed(3)),
@@ -803,6 +1313,7 @@ window.render_game_to_text = () => {
     crafting: craftSlots.map((slot) => ({ id: slot.id, count: slot.count, durability: slot.durability })),
     craftingTable: tableCraftSlots.map((slot) => ({ id: slot.id, count: slot.count, durability: slot.durability })),
     droppedItems: itemEntities.slice(0, 30).map((entity) => ({
+      entityId: entity.entityId,
       id: entity.id,
       count: entity.count,
       x: Number(entity.position.x.toFixed(2)),
@@ -817,10 +1328,49 @@ window.render_game_to_text = () => {
       z: Number(mob.position.z.toFixed(2)),
       health: mob.health,
     })),
+    multiplayer: {
+      connected: state.multiplayer.connected,
+      isHost: state.multiplayer.isHost,
+      room: state.multiplayer.room,
+      clientId: network.clientId,
+      players: getRemotePlayers().map((p) => ({
+        id: p.id,
+        name: p.name,
+        x: Number(p.x.toFixed(2)),
+        y: Number(p.y.toFixed(2)),
+        z: Number(p.z.toFixed(2)),
+      })),
+    },
     perfBench: typeof window !== "undefined" ? window.__perfBench || null : null,
   };
   return JSON.stringify(payload);
 };
+
+if (urlParams.get("test") === "1") {
+  window.__test = {
+    getBlock: (x, y, z) => getBlock(x, y, z),
+    setBlock: (x, y, z, type) => setBlock(x, y, z, type),
+    spawnItem: (id, count, x, y, z) => spawnItemDrop(id, count, x, y, z),
+    listItems: () =>
+      itemEntities.map((entity) => ({
+        entityId: entity.entityId,
+        id: entity.id,
+        count: entity.count,
+        x: entity.position.x,
+        y: entity.position.y,
+        z: entity.position.z,
+      })),
+    listMobs: () =>
+      getMobs().map((mob) => ({
+        id: mob.id,
+        type: mob.type,
+        x: mob.position.x,
+        y: mob.position.y,
+        z: mob.position.z,
+        health: mob.health,
+      })),
+  };
+}
 
 if (urlParams.get("realtime") !== "1") {
   window.advanceTime = (ms) => {

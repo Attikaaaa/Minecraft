@@ -90,10 +90,10 @@ export class FallingBlock {
       // Blokk lerakása
       const currentBlock = getBlock(blockX, blockY, blockZ);
       if (currentBlock === 0 || currentBlock === 8) {
-        setBlock(blockX, blockY, blockZ, this.blockType, { skipPhysics: true });
+        setBlock(blockX, blockY, blockZ, this.blockType, { skipPhysics: true, source: "physics" });
       } else {
         // Ha nem lehet lerakni, item drop
-        spawnItemDrop(this.x, this.y, this.z, this.blockType, 1);
+        spawnItemDrop(this.blockType, 1, this.x, this.y, this.z);
       }
       this.remove();
     }
@@ -148,7 +148,7 @@ export const checkFallingBlock = (x, y, z) => {
   
   if (blockBelow === 0 || blockBelow === 8) { // Levegő vagy víz
     // Töröljük a blokkot és létrehozunk falling block entitást
-    setBlock(x, y, z, 0, { skipPhysics: true });
+    setBlock(x, y, z, 0, { skipPhysics: true, source: "physics" });
     createFallingBlock(x, y, z, blockType);
   }
 };
@@ -169,8 +169,8 @@ const checkSupportedBlocks = (x, y, z) => {
   if (NEEDS_SUPPORT_BLOCKS.has(above)) {
     // Töröljük és item drop
     removeTorchOrientation(x, y + 1, z);
-    setBlock(x, y + 1, z, 0, { skipPhysics: true });
-    spawnItemDrop(x + 0.5, y + 1, z + 0.5, above, 1);
+    setBlock(x, y + 1, z, 0, { skipPhysics: true, source: "physics" });
+    spawnItemDrop(above, 1, x + 0.5, y + 1, z + 0.5);
   }
   
   // Oldalsó blokkok (fáklya a falon)
@@ -189,8 +189,8 @@ const checkSupportedBlocks = (x, y, z) => {
       const hasSupport = checkBlockHasSupport(nx, ny, nz);
       if (!hasSupport) {
         removeTorchOrientation(nx, ny, nz);
-        setBlock(nx, ny, nz, 0, { skipPhysics: true });
-        spawnItemDrop(nx + 0.5, ny, nz + 0.5, block, 1);
+        setBlock(nx, ny, nz, 0, { skipPhysics: true, source: "physics" });
+        spawnItemDrop(block, 1, nx + 0.5, ny, nz + 0.5);
       }
     }
   }
@@ -220,4 +220,3 @@ const checkBlockHasSupport = (x, y, z) => {
   
   return false;
 };
-

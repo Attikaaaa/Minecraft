@@ -114,11 +114,36 @@ button:hover {
   flex: 1;
 }
 
+.option-row input[type="text"] {
+  flex: 1;
+  background: #1a1a1a;
+  border: 1px solid #3f3f3f;
+  color: #fff;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
 .option-value {
   min-width: 48px;
   text-align: right;
   font-size: 12px;
   opacity: 0.9;
+}
+
+.mp-status {
+  margin-top: 8px;
+  font-size: 12px;
+  text-align: center;
+  min-height: 18px;
+}
+
+.mp-link {
+  margin-top: 8px;
+  padding: 6px 8px;
+  background: #161616;
+  border: 1px solid #3f3f3f;
+  font-size: 11px;
+  word-break: break-all;
 }
 
 #hud.hidden {

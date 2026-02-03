@@ -37,7 +37,7 @@ export const createWaterSystem = ({ getBlock, setBlock, getWaterLevel, setWaterL
     const type = getBlock(x, y, z);
     if (type !== 0 && type !== 8) return;
     const nextLevel = Math.max(0, Math.min(MAX_LEVEL, level));
-    setBlock(x, y, z, 8, { waterLevel: nextLevel, skipWater: true });
+    setBlock(x, y, z, 8, { waterLevel: nextLevel, skipWater: true, source: "water" });
     setWaterLevel(x, y, z, nextLevel);
     enqueueAround(x, y, z);
   };
@@ -45,7 +45,7 @@ export const createWaterSystem = ({ getBlock, setBlock, getWaterLevel, setWaterL
   const removeWater = (x, y, z) => {
     if (!isWithinWorld(x, y, z)) return;
     if (getBlock(x, y, z) !== 8) return;
-    setBlock(x, y, z, 0, { skipWater: true });
+    setBlock(x, y, z, 0, { skipWater: true, source: "water" });
     setWaterLevel(x, y, z, 0, true);
     enqueueAround(x, y, z);
   };

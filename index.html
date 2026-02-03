@@ -50,6 +50,7 @@
         <h2>Játék menü</h2>
         <div class="menu-buttons">
           <button id="pause-resume-btn" class="menu-button">Vissza a játékba</button>
+          <button id="pause-mp-btn" class="menu-button">Multiplayer</button>
           <button id="pause-options-btn" class="menu-button">Beállítások...</button>
           <button id="pause-quit-btn" class="menu-button">Mentés és kilépés</button>
         </div>
@@ -69,11 +70,42 @@
             <input id="options-fov" type="range" min="60" max="110" step="1" />
             <span id="options-fov-value" class="option-value"></span>
           </div>
+          <div class="option-row">
+            <label for="options-view-distance">Látótávolság (chunk)</label>
+            <input id="options-view-distance" type="range" min="1" max="32" step="1" />
+            <span id="options-view-distance-value" class="option-value"></span>
+          </div>
+          <button id="options-unlimited-view-btn" class="menu-button">Végtelen látótáv: Ki</button>
           <button id="options-debug-btn" class="menu-button">Debug HUD: Ki</button>
           <button id="options-perf-btn" class="menu-button">Perf overlay: Ki</button>
           <button id="options-fullscreen-btn" class="menu-button">Teljes képernyő</button>
         </div>
         <button id="options-back-btn" class="menu-button">Vissza</button>
+      </div>
+    </div>
+    <div id="multiplayer-menu" class="overlay hidden">
+      <div class="panel menu-panel">
+        <h2>Multiplayer</h2>
+        <div class="options-grid">
+          <div class="option-row">
+            <label for="mp-name">Játékos név</label>
+            <input id="mp-name" type="text" maxlength="24" />
+          </div>
+          <div class="option-row">
+            <label for="mp-server">Szerver</label>
+            <input id="mp-server" type="text" placeholder="ws://localhost:8080" />
+          </div>
+          <div class="option-row">
+            <label for="mp-room">Szoba kód</label>
+            <input id="mp-room" type="text" maxlength="8" />
+          </div>
+          <button id="mp-host-btn" class="menu-button">Host</button>
+          <button id="mp-join-btn" class="menu-button">Csatlakozás</button>
+          <button id="mp-disconnect-btn" class="menu-button">Kapcsolat bontása</button>
+        </div>
+        <div id="mp-status" class="mp-status"></div>
+        <div id="mp-link" class="mp-link hidden"></div>
+        <button id="mp-close-btn" class="menu-button">Vissza</button>
       </div>
     </div>
     <div id="inventory" class="hidden">

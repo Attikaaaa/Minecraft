@@ -183,8 +183,8 @@ export const updatePlayer = (dt) => {
     }
 
     const yaw = player.yaw;
-    const cosPitch = Math.cos(player.pitch);
-    forwardDir.set(Math.sin(yaw) * cosPitch, Math.sin(player.pitch), Math.cos(yaw) * cosPitch);
+    // Minecraft-szerű: előre/hátra mindig vízszintesen, ne emeljen a nézés.
+    forwardDir.set(Math.sin(yaw), 0, Math.cos(yaw));
     rightDir.set(Math.sin(yaw + Math.PI / 2), 0, Math.cos(yaw + Math.PI / 2));
 
     desired.set(0, 0, 0);
@@ -197,7 +197,8 @@ export const updatePlayer = (dt) => {
 
     if (desired.lengthSq() > 0) desired.normalize();
     const baseSpeed = isSpectator ? 8 : 6;
-    const speed = baseSpeed * (input.boost ? 2 : 1);
+    const flySpeed = Math.max(0.1, state.flySpeed || 1);
+    const speed = baseSpeed * flySpeed * (input.boost ? 2 : 1);
     const delta = speed * dt;
 
     player.onGround = false;
@@ -241,6 +242,7 @@ export const updatePlayer = (dt) => {
   if (movementEnabled && isSprinting) {
     moveSpeed *= 1.3; // Sprint sebesség
   }
+  moveSpeed *= Math.max(0.1, state.movementSpeed || 1);
   
   // Sprint leáll ha ütközünk vagy nincs éhség
   if (isSprinting && player.hunger <= 6) {

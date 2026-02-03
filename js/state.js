@@ -1,8 +1,14 @@
+import { CHUNK_RADIUS } from "./config.js";
+
 export const state = {
   mode: "menu",
   gamemode: "survival",
   mouseSensitivity: 1,
   fov: 75,
+  viewRadius: CHUNK_RADIUS,
+  unlimitedViewDistance: false,
+  movementSpeed: 1,
+  flySpeed: 1,
   lastTime: 0,
   manualTime: false,
   timeOfDay: 0.25,
@@ -30,6 +36,15 @@ export const state = {
   },
   currentChunkX: null,
   currentChunkZ: null,
+  currentViewRadius: null,
   worldInitialized: false,
   respawnPoint: null,
+  multiplayer: {
+    enabled: false,
+    connected: false,
+    isHost: false,
+    room: null,
+    name: "Player",
+    serverUrl: "ws://localhost:8080",
+  },
 };

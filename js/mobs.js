@@ -143,12 +143,13 @@ const buildMobMesh = (def) => {
   return group;
 };
 
-export const spawnMob = (type, position) => {
+export const spawnMob = (type, position, idOverride = null) => {
   const def = mobDefs[type];
   if (!def) return null;
   const pos = position.clone();
+  const resolvedId = Number.isFinite(idOverride) ? idOverride : nextMobId++;
   const mob = {
-    id: nextMobId++,
+    id: resolvedId,
     type,
     def,
     position: pos,
@@ -172,6 +173,7 @@ export const spawnMob = (type, position) => {
   mobs.push(mob);
   mobsById.set(mob.id, mob);
   mobMeshes.push(mob.mesh);
+  if (resolvedId >= nextMobId) nextMobId = resolvedId + 1;
   return mob;
 };
 
@@ -284,8 +286,42 @@ export const updateMobs = (dt) => {
   }
 };
 
+export const syncMobs = (mobData) => {
+  if (!Array.isArray(mobData)) return;
+  const seen = new Set();
+  for (const data of mobData) {
+    if (!data || data.id == null) continue;
+    const id = Number(data.id);
+    if (!Number.isFinite(id)) continue;
+    seen.add(id);
+    let mob = mobsById.get(id);
+    if (!mob) {
+      const pos = new THREE.Vector3(data.x || 0, data.y || 0, data.z || 0);
+      mob = spawnMob(data.type, pos, id);
+      if (!mob) continue;
+    }
+    mob.position.set(data.x || 0, data.y || 0, data.z || 0);
+    mob.mesh.position.copy(mob.position);
+    if (Number.isFinite(data.yaw)) mob.yaw = data.yaw;
+    mob.mesh.rotation.y = mob.yaw || 0;
+    if (Number.isFinite(data.health)) mob.health = data.health;
+  }
+
+  for (const mob of [...mobs]) {
+    if (!seen.has(mob.id)) {
+      despawnMob(mob);
+    }
+  }
+};
+
 export const getMobs = () => mobs;
 export const getMobDefs = () => mobDefs;
+
+export const clearMobs = () => {
+  for (const mob of [...mobs]) {
+    despawnMob(mob);
+  }
+};
 
 const findGround = (x, z) => {
   for (let y = WORLD_MAX_HEIGHT - 2; y >= 1; y -= 1) {

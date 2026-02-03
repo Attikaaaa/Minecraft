@@ -1,0 +1,16 @@
+{
+  "name": "blockland-3d",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "ci": "node scripts/run-ci.mjs",
+    "bench": "node scripts/run_benchmark.js"
+  },
+  "dependencies": {
+    "ws": "^8.17.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  }
+}

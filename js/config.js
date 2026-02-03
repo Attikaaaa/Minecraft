@@ -1,6 +1,10 @@
 export const urlParams = new URLSearchParams(window.location.search);
 export const disablePointerLock = urlParams.has("nopointerlock");
 
+export const VIEW_RADIUS_MIN = 1;
+export const VIEW_RADIUS_MAX = 32;
+export const VIEW_RADIUS_UNLIMITED = 32;
+
 export const WORLD_MAX_HEIGHT = 64;
 export const SEA_LEVEL = 16;
 export const CHUNK_SIZE = 16;
@@ -9,7 +13,7 @@ export const CHUNK_RADIUS = (() => {
   const radiusParam = Number(urlParams.get("radius"));
   if (Number.isFinite(radiusParam)) {
     const rounded = Math.round(radiusParam);
-    return Math.max(1, Math.min(rounded, 6));
+    return Math.max(VIEW_RADIUS_MIN, Math.min(rounded, VIEW_RADIUS_MAX));
   }
   if (sizeParam) {
     const key = sizeParam.toLowerCase();

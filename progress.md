@@ -132,9 +132,36 @@ Original prompt: Csinálj egy 3d játékot, wasd mozgas, nezes minden, minecraft
 - Item ikonok frissítése: refreshItemIcons + main.js-ben atlas init után hívva.
 - Item drop stabilizálás: induló sebesség 0, földön nincs bobbing, így nem pattog/oldalra csúszik.
 - Playwright futtatva: output/web-game-run45 (shot-0.png rendben, errors nincs).
+- Test mode diagnosztika: WebGL init info + renderer init try/catch (scene.js), rAF tick számláló (main.js), utolsó mesh upload meta (world.js).
+- Perf bench: window.__BENCH_RESULT beállítva.
+- CI runner hozzáadva: scripts/run-ci.mjs + scripts/ci/playwright-config.mjs, statikus szerver, WebGL self-check, smoke + bench A/B/C, fallback headed/Xvfb, report + SUMMARY.md.
+- package.json + README_DEV.md hozzáadva (npm run ci).
+- Playwright futtatva a skill klienssel (output/web-game-run-speed/shot-0.png ellenőrizve).
 - ESC pause menü (Minecraft-szerű): játék megáll, HUD elrejt, inputok tiltva, pointer unlock. Gombok: vissza, beállítások, mentés/kilépés.
 - Beállítások képernyő: érzékenység és FOV slider, Debug HUD + Perf overlay toggle, fullscreen gomb; értékek localStorage-ben mentve.
 - Menü frissítve: Esc menüre utal, resume + új világ gombok.
 - render_game_to_text kibővítve menü/setting állapottal.
 - Playwright futtatva: output/web-game-pause-menu és output/web-game-options-menu2 screenshot ellenőrzés rendben.
 - Playwright kliens bővítve: "escape" gomb támogatás.
+- Beállítások menüben View Distance (chunk) slider hozzáadva, állítás azonnal érvényesül (chunk töltés + fog distance frissítés).
+- View distance mentése localStorage-ben, render_game_to_text-ben visszaadva.
+- ensureChunksAround dinamikus view radius-szal (state.viewRadius), entity despawn határ is ehhez igazítva.
+- Playwright futtatva: output/web-game-options-menu3 screenshot ellenőrzés rendben.
+- View distance max 32 chunk + "Végtelen látótáv" toggle a beállításokban.
+- Végtelen módban a chunkok nem kerülnek unloadra; fog + camera far megnő.
+- View distance min/max konstansok config.js-ben, entity despawn határ ehhez igazítva.
+- Playwright futtatva: output/web-game-options-menu5 (layout), output/web-game-options-menu7 (toggled próbálkozás, UI rendben).
+- Creative/Spectator mozgás: előre/hátra vízszintes, nem emel a nézés (Minecraft-szerű). Fly speed szorzó hozzáadva.
+- Új chat parancsok: /speed (survival) és /flyspeed (creative/spectator), 0.1–10x, azonnal érvényesül.
+- render_game_to_text kibővítve: movementSpeed + flySpeed.
+- Playwright futtatva: output/web-game-run-speed screenshot ellenőrzés rendben.
+
+- Multiplayer rendszer bevezetve: WebSocket szerver (server.js + ws), kliens oldali hálózat (js/network.js), távoli játékosok render (js/remote-players.js), UI (multiplayer menü), world/mob/item/time szinkron alapok.
+- Host-authoritative tick: víz + mob + falling block csak hoston fut; kliensek entity snapshotokat kapnak.
+- Block update broadcast + alkalmazás; fáklya orientáció és waterLevel továbbítva; physics/water update csak hosttól.
+- Item dropoknak entityId, sync logika + pickup jelzés; remote item/mob clear sync funkciók.
+- Chat üzenetek hálózaton küldve.
+- render_game_to_text bővítve multiplayer állapottal.
+
+Teszt:
+- Playwright: output/web-game-mp1/shot-0.png + state-0.json (alap render OK). Multiplayer két klienssel nem volt élőben tesztelve.

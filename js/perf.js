@@ -144,6 +144,7 @@ const finishBenchmark = () => {
   };
   if (typeof window !== "undefined") {
     window.__perfBench = payload;
+    window.__BENCH_RESULT = payload;
     window.__perfBenchHistory = [...(window.__perfBenchHistory || []), payload];
   }
   console.log("PERF_BENCH", JSON.stringify(payload));

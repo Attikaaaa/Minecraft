@@ -6,6 +6,7 @@ import { killPlayer, player, teleportPlayer } from "./player.js";
 import { spawnMob, getMobDefs } from "./mobs.js";
 import { THREE } from "./scene.js";
 import { setTimeOfDay } from "./time.js";
+import { network, sendAction, sendChat } from "./network.js";
 import { clamp, randomSeed, WORLD_MAX_HEIGHT } from "./config.js";
 import { blockDefs } from "./textures.js";
 import { isWithinWorld, setBlock } from "./world.js";
@@ -143,6 +144,8 @@ const parseNumber = (value) => {
   const num = Number(value);
   return Number.isFinite(num) ? num : null;
 };
+
+const clampSpeed = (value, min = 0.1, max = 10) => Math.max(min, Math.min(max, value));
 
 const parseCoord = (value, base) => {
   if (value == null) return null;
@@ -307,6 +310,11 @@ registerCommand("summon", "Mob idézés", "/summon <cow|pig|sheep|chicken> [x y 
     showUsage("/summon <cow|pig|sheep|chicken> [x y z]");
     return;
   }
+  if (network.connected && !network.isHost) {
+    sendAction({ kind: "spawn_mob", type, position: { x, y, z } });
+    addChatMessage(`Summon kérés elküldve: ${type}`, "system");
+    return;
+  }
   const spawnPos = new THREE.Vector3(x, y, z);
   spawnMob(type, spawnPos);
   addChatMessage(`Summon: ${type}`, "system");
@@ -317,15 +325,21 @@ registerCommand("time", "Idő beállítása", "/time set day|night", (args) => {
     showUsage("/time set day|night");
     return;
   }
-  if (args[1] === "day") {
-    setTimeOfDay(0.25);
-    addChatMessage("Idő beállítva: nappal", "system");
-  } else if (args[1] === "night") {
-    setTimeOfDay(0.75);
-    addChatMessage("Idő beállítva: éjszaka", "system");
-  } else {
+  const mode = args[1];
+  let value = null;
+  if (mode === "day") value = 0.25;
+  if (mode === "night") value = 0.75;
+  if (value == null) {
     showUsage("/time set day|night");
+    return;
   }
+  if (network.connected && !network.isHost) {
+    sendAction({ kind: "set_time", value });
+    addChatMessage(`Idő kérés elküldve: ${mode}`, "system");
+    return;
+  }
+  setTimeOfDay(value);
+  addChatMessage(`Idő beállítva: ${mode === "day" ? "nappal" : "éjszaka"}`, "system");
 });
 
 registerCommand("gamemode", "Játékmód váltás", "/gamemode <survival|creative|spectator>", (args) => {
@@ -347,6 +361,34 @@ registerCommand("gamemode", "Játékmód váltás", "/gamemode <survival|creativ
     `Játékmód: ${mode === "creative" ? "Kreatív" : mode === "spectator" ? "Néző" : "Túlélő"}`,
     "system"
   );
+});
+
+registerCommand("speed", "Mozgás sebesség (survival)", "/speed <0.1..10>", (args) => {
+  if (!args[0]) {
+    addChatMessage(`Mozgás sebesség: ${state.movementSpeed.toFixed(2)}x`, "system");
+    return;
+  }
+  const value = parseNumber(args[0]);
+  if (value == null) {
+    showUsage("/speed <0.1..10>");
+    return;
+  }
+  state.movementSpeed = clampSpeed(value);
+  addChatMessage(`Mozgás sebesség beállítva: ${state.movementSpeed.toFixed(2)}x`, "system");
+});
+
+registerCommand("flyspeed", "Repülés sebesség (creative/spectator)", "/flyspeed <0.1..10>", (args) => {
+  if (!args[0]) {
+    addChatMessage(`Fly sebesség: ${state.flySpeed.toFixed(2)}x`, "system");
+    return;
+  }
+  const value = parseNumber(args[0]);
+  if (value == null) {
+    showUsage("/flyspeed <0.1..10>");
+    return;
+  }
+  state.flySpeed = clampSpeed(value);
+  addChatMessage(`Fly sebesség beállítva: ${state.flySpeed.toFixed(2)}x`, "system");
 });
 
 registerCommand("kill", "Azonnali halál", "/kill", () => {
@@ -436,7 +478,10 @@ chatInputEl?.addEventListener("keydown", (event) => {
     const text = chatInputEl.value.trim();
     if (text) {
       if (text.startsWith("/")) runCommand(text);
-      else addChatMessage(text, "player");
+      else {
+        addChatMessage(text, "player");
+        if (network.connected) sendChat(text);
+      }
       history.push(text);
       if (history.length > 50) history.shift();
       resetHistoryNavigation();
