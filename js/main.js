@@ -745,6 +745,8 @@ const BENCH_DURATION_MS = 30000;
 const BENCH_SPAM_INTERVAL_MS = 100;
 const BENCH_BLOCK_TYPE = 11;
 const testMode = urlParams.get("test") === "1";
+const showBlocksMode = testMode && urlParams.has("showblocks");
+const waterDemoMode = testMode && urlParams.has("waterdemo");
 
 if (testMode && typeof window !== "undefined") {
   window.__RAF_TICKS = 0;
@@ -777,6 +779,73 @@ const resetBenchInput = () => {
   input.boost = false;
   input.mining = false;
   resetMining();
+};
+
+const setupShowBlocksPreview = () => {
+  if (!showBlocksMode) return;
+  const blockIds = [
+    1, 2, 3, 4, 5, 6, 7, 8, 9,
+    10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+  ];
+  const baseY = Math.max(spawn.height, SEA_LEVEL);
+  const startX = Math.round(spawn.x) - Math.floor(blockIds.length / 2);
+  const baseZ = Math.round(spawn.z + 4);
+  blockIds.forEach((id, index) => {
+    setBlock(startX + index, baseY, baseZ, id, {
+      skipBroadcast: true,
+      skipWater: true,
+      skipPhysics: true,
+      torchOrientation: "floor",
+    });
+  });
+  player.yaw = 0;
+  player.pitch = -0.5;
+  camera.rotation.set(player.pitch, player.yaw, 0, "YXZ");
+};
+
+const setupWaterTestPreview = () => {
+  if (!waterDemoMode) return;
+  const radius = 20;
+  const baseY = Math.max(spawn.height, SEA_LEVEL);
+  const centerX = Math.round(spawn.x);
+  const centerZ = Math.round(spawn.z);
+  const startX = centerX - radius;
+  const endX = centerX + radius;
+  const startZ = centerZ - radius;
+  const endZ = centerZ + radius;
+  for (let x = startX; x <= endX; x += 1) {
+    for (let z = startZ; z <= endZ; z += 1) {
+      setBlock(x, baseY, z, 8, {
+        skipBroadcast: true,
+        skipWater: true,
+        skipPhysics: true,
+        waterLevel: 0,
+      });
+      for (let y = baseY + 1; y <= baseY + 4; y += 1) {
+        setBlock(x, y, z, 0, {
+          skipBroadcast: true,
+          skipWater: true,
+          skipPhysics: true,
+        });
+      }
+    }
+  }
+  const cameraPos = {
+    x: centerX + 0.5,
+    y: baseY + 12,
+    z: centerZ - radius - 6,
+  };
+  teleportPlayer(cameraPos.x, cameraPos.y, cameraPos.z);
+  const dx = centerX + 0.5 - cameraPos.x;
+  const dy = baseY + 0.5 - cameraPos.y;
+  const dz = centerZ + 0.5 - cameraPos.z;
+  const yaw = Math.atan2(dx, dz);
+  const dist = Math.hypot(dx, dz) || 0.0001;
+  const pitch = -Math.atan2(dy, dist);
+  player.yaw = yaw;
+  player.pitch = pitch;
+  camera.rotation.set(player.pitch, player.yaw, 0, "YXZ");
+  state.manualTime = false;
 };
 
 const computeBenchTarget = () => {
@@ -1220,6 +1289,8 @@ const startGame = async () => {
   console.log("Atlas kész!");
   
   initializeWorld();
+  setupShowBlocksPreview();
+  setupWaterTestPreview();
   initTime();
   state.mode = "playing";
   state.optionsOpen = false;
@@ -1482,6 +1553,10 @@ const tick = (time) => {
     
     if (benchState.enabled) {
       updateBenchScenario(dt);
+    }
+    if (waterDemoMode) {
+      player.yaw += dt * 0.4;
+      player.pitch = Math.max(-1.2, Math.min(-0.2, player.pitch));
     }
     const worldStart = performance.now();
     let uiMs = 0;

@@ -205,3 +205,7 @@ Teszt:
 - Chunk betöltés gyorsítva: adaptív budget scale (queue + speed boost), lookahead chunk prefetch, load boost state. Playwright futtatva: output/web-game-chunkfast/shot-0.png.
 - Water seam fix: mesher-worker water UV-k most world koordinátára számolnak (megegyezik main mesherrel), eltűnnek a chunk-határon lévő csíkok.
 - Víz teszt screenshotok: output/water-test-p*.png (bug), output/water-test-fixed-p*.png (fix ellenőrzés).
+- Grass/leaves textúrák biome-szerű tintet kapnak (grass_block_top + oak_leaves, run-time canvas tint), így a fű nem szürke.
+- Test-only showblocks mód: `?test=1&showblocks=1` kis blokk-sor spawn előtt + kamera lejtés, gyors textúra ellenőrzéshez.
+- Playwright futtatva textúra ellenőrzéshez: output/texture-check4/shot-0.png + state-0.json.
+- showblocks preview sor bővítve minden blokkra (1–19), torch floor orientációval; Playwright futtatva: output/texture-check5/shot-0.png + state-0.json.
